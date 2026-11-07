@@ -422,13 +422,18 @@ _axle_top_full() {
 # The rest of an arrow key (ESC [ A) is waited for up to 0.1 s: through Windows Terminal
 # and WSL its bytes can come apart.
 # (Read from stdin, which _axle_top_raw has set to one key at a time with no echo.)
+# Waits use zselect, not read -t: on macOS, read's timeout doesn't wait on a pipe, which
+# split an arrow key into Esc + text, and would spin the redraw loop.
 _axle_top_key() {
   local k k2 k3
+  local -i wait=$(( ${1:-0} * 100 ))              # (hundredths of a second)
   REPLY=''
-  read -u0 -rk1 -t $1 k || return 1
+  zmodload zsh/zselect 2>/dev/null
+  zselect -t $wait -r 0 2>/dev/null && read -u0 -rk1 k || return 1
   case $k in
     $'\e')
-      if read -u0 -rk1 -t 0.1 k2 && [[ $k2 == ('['|O) ]] && read -u0 -rk1 -t 0.1 k3; then
+      if zselect -t 10 -r 0 2>/dev/null && read -u0 -rk1 k2 && [[ $k2 == ('['|O) ]] &&
+         zselect -t 10 -r 0 2>/dev/null && read -u0 -rk1 k3; then
         case $k3 in A) REPLY=up ;; B) REPLY=down ;; *) REPLY=other ;; esac
       else
         REPLY=esc

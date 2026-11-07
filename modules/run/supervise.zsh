@@ -31,13 +31,18 @@ _axle_run_supervise() {
   # AXLE_RUN_DEBUG: a trace of the supervisor in <dir>/trace (the tests turn it on).
   if [[ -n $AXLE_RUN_DEBUG ]]; then exec 2>>$dir/trace; setopt xtrace; fi
   _axle_run_put $dir watcher $$
-  cd -- $root || { _axle_run_put $dir state crashed; _axle_run_put $dir code 1; return 1 }
+  cd -- $root || { _axle_run_put $dir code 1; _axle_run_put $dir state crashed; return 1 }
   local REPLY e use=$AXLE_RUN_USE_VENV owner=$AXLE_RUN_OWNER open=$AXLE_RUN_OPEN_URL
   local onfail=$AXLE_RUN_ONFAIL logmax=$AXLE_RUN_LOG_MAX notify=$AXLE_RUN_NOTIFY health=$AXLE_RUN_HEALTH
   local -i unit=${_AXLE_RUN_BACKOFF_CS:-100}         # (a restart's second; the tests shorten it)
   local -i worker=${AXLE_RUN_WORKER:-0}              # (no port: up once it's run 2 s)
+  local -i reload=${AXLE_RUN_ENV_RELOAD:-1} envchanged=0
   unset AXLE_RUN_USE_VENV AXLE_RUN_OWNER AXLE_RUN_OPEN_URL AXLE_RUN_ONFAIL AXLE_RUN_LOG_MAX AXLE_RUN_NOTIFY \
-        AXLE_RUN_HEALTH AXLE_RUN_WORKER
+        AXLE_RUN_HEALTH AXLE_RUN_WORKER AXLE_RUN_ENV_RELOAD
+  # Its .env files, watched: changed, it starts again with them (AXLE_RUN_ENV_RELOAD=0: not).
+  local -a watch=($root/.env)
+  if [[ -r $dir/envfiles ]]; then local -a reply; _axle_run_words $dir/envfiles; watch=($reply); fi
+  _axle_run_env_stamp $watch; local stamp=$REPLY
   [[ -z $use ]] && _axle_venv_find $root && use=$REPLY
   _axle_run_enter_venv "$use"
   [[ -n $port ]] && export PORT=$port
@@ -52,9 +57,11 @@ _axle_run_supervise() {
     spid=$! started=$EPOCHSECONDS port=$first_port url=''
     _axle_run_pstart $spid && _axle_run_put $dir pstart $REPLY
     _axle_run_put $dir pid $spid
-    _axle_run_put $dir state starting
     # The tab lives as long as the service (not this supervisor, which could be killed).
+    # Throughout: the tab first, the state last, so whatever sees a state (the prompt,
+    # ls, top) finds its tab already there.
     _axle_run_drop $name starting '' '' $spid
+    _axle_run_put $dir state starting
 
     # Until it answers: the port it printed in its log (a dev server may pick the next
     # free one), else the one detected.
@@ -68,20 +75,21 @@ _axle_run_supervise() {
         url=${url:-http://localhost:$port}
         _axle_run_put $dir port $port
         _axle_run_put $dir url $url
-        _axle_run_put $dir state up
         _axle_run_drop $name up $port $url $spid '' $restarts
+        _axle_run_put $dir state up
         (( open && ! restarts )) && _axle_run_browse $url
         [[ $notify == (ready|all) ]] && (( ! restarts )) && _axle_run_notify "axle run: $name" "up on $url"
         break
       fi
       # A worker (a Procfile's worker:, css:...) listens on nothing: up once it's lasted.
       if (( worker )) && [[ -z $port ]] && (( EPOCHSECONDS - started >= 2 )); then
-        _axle_run_put $dir state up
         _axle_run_drop $name up '' '' $spid '' $restarts
+        _axle_run_put $dir state up
         [[ $notify == (ready|all) ]] && (( ! restarts )) && _axle_run_notify "axle run: $name" "running"
         break
       fi
       _axle_run_log_trim $dir $maxbytes
+      _axle_run_sup_envcheck && break
       zselect -t 25
     done
     # Then every 2 s: its terminal (AXLE_RUN_ON_EXIT=stop), and its log's size; every 10 s
@@ -90,6 +98,7 @@ _axle_run_supervise() {
     while kill -0 $spid 2>/dev/null; do
       _axle_run_owner_gone $owner && { _axle_run_sup_term; return 0 }
       _axle_run_log_trim $dir $maxbytes
+      _axle_run_sup_envcheck && break
       if [[ -n $health && -n $port ]] && (( ++beat % every == 0 )); then
         if _axle_run_health_ok $port $health; then
           if (( fails >= 3 )); then                # (the tab first: whoever sees the state finds it)
@@ -109,6 +118,12 @@ _axle_run_supervise() {
     wait $spid
     code=$?
     [[ -e $dir/stopping || ! -d $dir ]] && return 0
+    if (( envchanged )); then                      # (stopped by us: not a crash)
+      envchanged=0
+      print -r -- "axle run: ${(j:, :)${(@)watch:t}} changed: starting $name again with it"
+      _axle_run_sup_reenv
+      continue
+    fi
     if (( code == 0 || code == 130 || code == 143 )); then
       _axle_run_forget $name        # it finished, or was stopped (INT, TERM): nothing to show
       return 0
@@ -123,8 +138,8 @@ _axle_run_supervise() {
         (( restarts++ ))
         _axle_run_put $dir restarts $restarts
         _axle_run_put $dir code $code
-        _axle_run_put $dir state restarting
         _axle_run_drop $name restarting '' '' '' $code $restarts
+        _axle_run_put $dir state restarting
         print -r -- "axle run: $name exited (code $code); starting it again in ${delay}s (restart $restarts)"
         [[ $notify == (crash|all) ]] && _axle_run_notify "axle run: $name crashed" "exit $code - starting it again (restart $restarts)"
         zselect -t $(( delay * unit ))
@@ -133,12 +148,64 @@ _axle_run_supervise() {
       fi
       print -r -- "axle run: $name crashed $fast times in a row, each within 30 s: leaving it stopped"
     fi
-    _axle_run_put $dir state crashed
+    # The exit code and the red tab first, the state last: whatever sees "crashed" (the
+    # prompt, ls, top) finds them already there.
     _axle_run_put $dir code $code
     _axle_run_drop $name crashed '' '' '' $code
+    _axle_run_put $dir state crashed
     [[ $notify == (crash|all) ]] && _axle_run_notify "axle run: $name crashed" "exit $code - axle run logs $name"
     return 0
   done
+}
+
+# Its .env files' times and sizes (REPLY), to notice a change.
+_axle_run_env_stamp() {
+  local f
+  local -A st
+  REPLY=''
+  for f; do
+    if zstat -H st -- $f 2>/dev/null; then REPLY+="$st[mtime].$st[size]:"; else REPLY+='-:'; fi
+  done
+}
+
+# Has a watched .env file changed (the supervisor's variables in scope)? Then the service
+# is stopped (it's started again with the new values), status 0.
+_axle_run_sup_envcheck() {
+  (( reload )) || return 1
+  local REPLY
+  _axle_run_env_stamp $watch
+  [[ $REPLY == $stamp ]] && return 1
+  zselect -t 30                                    # (an editor may write it in two steps)
+  _axle_run_env_stamp $watch
+  stamp=$REPLY envchanged=1
+  local -a reply left
+  local pid
+  _axle_run_tree $spid
+  local -a pids=($reply)
+  kill -TERM $pids 2>/dev/null
+  local -i i
+  for i in {1..50}; do                             # up to 5 s, then forced
+    left=()
+    for pid in $pids; do kill -0 $pid 2>/dev/null && left+=($pid); done
+    (( ${#left} )) || break
+    zselect -t 10
+  done
+  (( ${#left} )) && kill -KILL $left 2>/dev/null
+  return 0
+}
+
+# The .env values again (the supervisor's envs): ones gone are unset, then the files'
+# values and axle run's own (<dir>/env) exported.
+_axle_run_sup_reenv() {
+  local -a reply fresh=() ours=()
+  local f e
+  for f in $watch; do _axle_run_envfile $f && fresh+=($reply); done
+  [[ -r $dir/env ]] && { _axle_run_words $dir/env; ours=($reply) }
+  local -A now=()
+  for e in $fresh $ours; do now[${e%%=*}]=1; done
+  for e in $envs; do (( ${+now[${e%%=*}]} )) || unset -- ${e%%=*}; done
+  for e in $fresh $ours; do export "$e"; done
+  envs=($fresh $ours)
 }
 
 # The supervisor got TERM (its variables in scope): stop the service and everything it
@@ -205,7 +272,9 @@ _axle_run_health_ok() {
   ztcp 127.0.0.1 $1 2>/dev/null || return 1
   local -i fd=$REPLY
   print -u $fd -rn -- "GET $2 HTTP/1.0"$'\r\n'"Host: localhost"$'\r\n\r\n' 2>/dev/null
-  IFS= read -t 2 -r -u $fd line 2>/dev/null
+  # (zselect waits for the answer: read's own -t doesn't wait on macOS)
+  zmodload zsh/zselect 2>/dev/null
+  zselect -t 200 -r $fd 2>/dev/null && IFS= read -r -u $fd line 2>/dev/null
   ztcp -c $fd 2>/dev/null
   [[ $line == HTTP/[0-9.]##' '[23][0-9][0-9]* ]]
 }
