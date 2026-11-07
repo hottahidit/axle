@@ -223,6 +223,11 @@ _cf_tool_steps() {
     _cf_ask "When a venv is switched automatically…" env_quiet ${AXLE_ENV_QUIET:-0} \
       "Say so in one line:0" "Stay silent:1"
   fi
+  if (( ${mods[(Ie)fix]} )); then
+    _cf_note='For example, Enter on "ckear": ckear isn'"'"'t a command: run clear? (Y/n). n runs it as typed.'
+    _cf_ask "When you run a command that doesn't exist, but one close to it does…" fix_correct ${AXLE_FIX_CORRECT:-1} \
+      "Ask to run that one instead:1" "Just say so after it fails (Esc Esc fixes it):0"
+  fi
   if (( ${mods[(Ie)run]} )); then
     _cf_note='Servers run in the background and show in the prompt: ⚡ shop :8000.'
     _cf_ask "When their terminal closes, axle run's servers…" run_on_exit ${AXLE_RUN_ON_EXIT:-keep} \
@@ -252,10 +257,12 @@ _cf_write() {
     fi
   fi
   if (( _cf_tool )); then
-    keys+=(AXLE_MODULES AXLE_SUGGEST AXLE_SUGGEST_LIST AXLE_ENV_QUIET AXLE_RUN_ON_EXIT AXLE_RUN_NOTIFY)
+    keys+=(AXLE_MODULES AXLE_SUGGEST AXLE_SUGGEST_LIST AXLE_ENV_QUIET AXLE_FIX_CORRECT AXLE_RUN_ON_EXIT
+           AXLE_RUN_NOTIFY)
     ours+=("# axle" "AXLE_MODULES=($_cf[modules])")
     [[ -n $_cf[suggest_list] ]] && ours+=("AXLE_SUGGEST_LIST=$_cf[suggest_list]")
     [[ -n $_cf[env_quiet] ]] && ours+=("AXLE_ENV_QUIET=$_cf[env_quiet]")
+    [[ -n $_cf[fix_correct] ]] && ours+=("AXLE_FIX_CORRECT=$_cf[fix_correct]")
     [[ -n $_cf[run_on_exit] ]] && ours+=("AXLE_RUN_ON_EXIT=$_cf[run_on_exit]")
     [[ -n $_cf[run_notify] ]] && ours+=("AXLE_RUN_NOTIFY=$_cf[run_notify]")
   fi

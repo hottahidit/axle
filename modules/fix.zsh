@@ -10,29 +10,46 @@
 #   apt install htop      → sudo apt install htop (needs root)
 #
 # Esc Esc on an empty line: the fix, or the last command with sudo. On a line you're
-# typing: adds or removes sudo. After `axle run` says why a service or task failed (a
+# typing: adds or removes sudo.
+#
+# On Enter, a command that doesn't exist with one close to it that does (ckear → clear):
+# asks "run clear?". Enter or y runs clear; n runs ckear as you typed it; e puts clear
+# on the line to edit; Esc goes back to the line. After `axle run` says why a service or task failed (a
 # missing package, a port that's taken, a database not started), its fix comes first.
 #
 #   AXLE_FIX_CMD=fix      the command's name ('' = none; Esc Esc still works)
 #   AXLE_FIX_KEY='^[^['   the key (Esc Esc; '' = none)
+#   AXLE_FIX_CORRECT=1    ask on Enter (0 = never; zsh's own `setopt correct` also turns it off)
 
 : ${AXLE_FIX_CMD=fix}
 (( ${+AXLE_FIX_KEY} )) || typeset -g AXLE_FIX_KEY='^[^['
 
 typeset -ga _axle_fix_git_cmds
 
-# Edit distance where swapping two neighbouring letters counts as one mistake (REPLY).
+# Keys next to each other on a QWERTY keyboard (ckear: k is next to l).
+typeset -gA _axle_fix_near=(
+  q wa  w qeas  e wrsd  r etdf  t ryfg  y tugh  u yihj  i uojk  o ipkl  p ol
+  a qwsz  s awedxz  d serfcx  f drtgvc  g ftyhbv  h gyujnb  j huikmn  k jiolm  l kop
+  z asx  x zsdc  c xdfv  v cfgb  b vghn  n bhjm  m njk
+)
+
+# Edit distance in half mistakes (REPLY): a letter added or missing is a mistake (2); a
+# wrong letter is one (2), or half of one (1) when its key is next to the right one; two
+# letters swapped (gti) is half of one (1).
 _axle_fix_distance() {
-  local a=$1 b=$2
+  local a=$1 b=$2 x y
   local -i la=${#a} lb=${#b} i j cost best
   local -A d
-  for (( i = 0; i <= la; i++ )); do d[$i,0]=$i; done
-  for (( j = 0; j <= lb; j++ )); do d[0,$j]=$j; done
+  for (( i = 0; i <= la; i++ )); do d[$i,0]=$(( 2 * i )); done
+  for (( j = 0; j <= lb; j++ )); do d[0,$j]=$(( 2 * j )); done
   for (( i = 1; i <= la; i++ )); do
     for (( j = 1; j <= lb; j++ )); do
-      [[ ${a[i]} == ${b[j]} ]] && cost=0 || cost=1
-      best=$(( d[$((i-1)),$j] + 1 ))
-      (( d[$i,$((j-1))] + 1 < best )) && best=$(( d[$i,$((j-1))] + 1 ))
+      x=${a[i]} y=${b[j]}
+      if [[ $x == $y ]]; then cost=0
+      elif [[ ${_axle_fix_near[${(L)x}]} == *${(L)y}* && -n $y ]]; then cost=1
+      else cost=2; fi
+      best=$(( d[$((i-1)),$j] + 2 ))
+      (( d[$i,$((j-1))] + 2 < best )) && best=$(( d[$i,$((j-1))] + 2 ))
       (( d[$((i-1)),$((j-1))] + cost < best )) && best=$(( d[$((i-1)),$((j-1))] + cost ))
       if (( i > 1 && j > 1 )) && [[ ${a[i]} == ${b[j-1]} && ${a[i-1]} == ${b[j]} ]]; then
         (( d[$((i-2)),$((j-2))] + 1 < best )) && best=$(( d[$((i-2)),$((j-2))] + 1 ))
@@ -45,13 +62,15 @@ _axle_fix_distance() {
 
 # The closest of the candidates to a word (REPLY), or status 1. Close means one mistake for
 # short words, two for longer ones; ties go to the candidate you use most, then the shorter.
+# (_axle_fix_limit, set by a caller: at most that many half mistakes.)
 _axle_fix_closest() {
   local word=$1 c; shift
-  local -i max=$(( ${#word} > 4 ? 2 : 1 )) best=99 uses bestuses=-1
+  local -i max=$(( ${#word} > 4 ? 4 : 2 )) best=99 uses bestuses=-1
+  (( ${_axle_fix_limit:-0} )) && max=$_axle_fix_limit
   local found=''
   for c; do
     [[ $c == $word ]] && continue
-    (( ${#c} - ${#word} <= max && ${#word} - ${#c} <= max )) || continue
+    (( 2 * (${#c} - ${#word}) <= max && 2 * (${#word} - ${#c}) <= max )) || continue
     # Cheap first: share the first letter, or the first two are swapped (sl → ls).
     [[ ${c[1]} == ${word[1]} || ( ${c[1]} == ${word[2]} && ${c[2]} == ${word[1]} ) ]] || continue
     _axle_fix_distance $word $c
@@ -66,14 +85,28 @@ _axle_fix_closest() {
   [[ -n $found ]]
 }
 
-# Commands worth comparing a typo against: what you've run, aliases, functions, builtins,
-# then (only if that finds nothing) everything on PATH.
+# A name that runs: an alias, function, builtin, reserved word or command on PATH.
+_axle_fix_exists() {
+  (( $+aliases[$1] || $+functions[$1] || $+builtins[$1] || $+reswords[$1] || $+commands[$1] ))
+}
+
+# Commands worth comparing a typo against (reply): what you've run that still exists,
+# aliases, functions, builtins.
+_axle_fix_mine() {
+  local c
+  reply=()
+  for c in ${(k)_axle_sg_count}; do reply+=(${c%% *}); done
+  reply=(${(u)reply})
+  for c in $reply; do _axle_fix_exists $c || reply=(${reply:#${(b)c}}); done
+  reply+=(${(k)aliases} ${(k)builtins} ${${(k)functions}:#_*})
+}
+
+# The closest command to a word (REPLY): yours first, then (only if that finds nothing)
+# everything on PATH.
 _axle_fix_command() {
-  local word=$1 c
-  local -a mine=()
-  for c in ${(k)_axle_sg_count}; do mine+=(${c%% *}); done
-  mine=(${(u)mine} ${(k)aliases} ${(k)builtins} ${${(k)functions}:#_*})
-  _axle_fix_closest $word $mine && return 0
+  local word=$1 reply
+  _axle_fix_mine
+  _axle_fix_closest $word $reply && return 0
   _axle_fix_closest $word ${(k)commands}
 }
 
@@ -209,13 +242,12 @@ axle-fix() {
 : ${AXLE_FIX_NOTFOUND=1}
 if (( AXLE_FIX_NOTFOUND )) && (( ! $+functions[command_not_found_handler] )); then
   command_not_found_handler() {
-    local w=${1//[[:cntrl:]]/?} c REPLY
-    local -a mine=()
-    for c in ${(k)_axle_sg_count}; do mine+=(${c%% *}); done
-    mine=(${(u)mine} ${(k)aliases} ${(k)builtins} ${${(k)functions}:#_*})
+    local w=${1//[[:cntrl:]]/?} REPLY reply
     local m=${_axle_c[muted]:-244}
     _axle_printp "%F{${_axle_c[error]:-red}}✘%f %B${w//\%/%%}%b%F{$m}: no such command%f" >&2
-    if _axle_fix_closest "$1" $mine; then
+    (( ${_axle_fix_declined[(Ie)$1]} )) && return 127   # (you said no to the close one on Enter)
+    _axle_fix_mine
+    if _axle_fix_closest "$1" $reply; then
       local how='fix puts it on the line'
       [[ -n $AXLE_FIX_KEY ]] && how='Esc Esc puts it on the line'
       [[ -z $AXLE_FIX_KEY && -z $AXLE_FIX_CMD ]] && how=''
@@ -269,7 +301,115 @@ _axle_fix_parse_ok() {
   _axle_fix_refused=$text
   return 1
 }
-_axle_fix_accept_line() { _axle_fix_parse_ok && zle .accept-line }
+# --- correcting on Enter ------------------------------------------------------------
+
+: ${AXLE_FIX_CORRECT=1}
+typeset -ga _axle_fix_declined=()
+# Commands that delete or overwrite: a correction into one of them is asked with No first.
+typeset -g _axle_fix_risky='(rm|rmdir|unlink|shred|dd|mkfs|mkfs.*|fdisk|parted|wipefs|kill|killall|pkill|reboot|shutdown|poweroff|halt|truncate|mv|cp|ln|chmod|chown|chgrp|install)'
+
+# One word in command position that isn't a command, and the one close to it that is
+# (REPLY), or status 1. Only plain names: not a path, a variable, a pattern, a folder
+# (auto_cd) or a file a suffix alias opens. Close, in half mistakes: 1 for up to three
+# letters (only two swapped, or a key next to the right one: rg is never rm), 2 for four,
+# 3 for five or more.
+_axle_fix_typo_word() {
+  setopt localoptions extendedglob
+  local w=$1 reply
+  REPLY=''
+  [[ ${#w} -ge 2 && $w == [[:alnum:]][[:alnum:]._+-]# ]] || return 1
+  _axle_fix_exists $w && return 1
+  (( $+galiases[$w] )) && return 1
+  [[ -o autocd && -d $w ]] && return 1
+  [[ $w == *.* && -n ${saliases[${w##*.}]} ]] && return 1
+  whence -p -- $w >/dev/null 2>&1 && return 1     # (installed since the last rehash)
+  local -i _axle_fix_limit=$(( ${#w} >= 5 ? 3 : ${#w} == 4 ? 2 : 1 ))
+  _axle_fix_mine
+  _axle_fix_closest $w $reply || _axle_fix_closest $w ${(k)commands} || return 1
+  # (two letters are too few to be sure of one that deletes things: rn is never rm)
+  (( ${#w} < 3 )) && [[ $REPLY == ${~_axle_fix_risky} ]] && return 1
+  _axle_fix_exists $REPLY
+}
+
+# A line with its mistyped commands corrected (REPLY; reply: the words it changed), or
+# status 1. Commands are the first word, and the first after ; | || && & ( { ! and
+# after if, while, then, do, else, sudo, command, env, time, nice, nohup, VAR=value.
+# A line that defines a function or alias, or runs over several lines, is left alone.
+_axle_fix_typos() {
+  setopt localoptions extendedglob
+  local line=$1 t
+  REPLY='' reply=()
+  [[ $line == *$'\n'* || $line == *'()'* ]] && return 1
+  local -a tok=(${(Z+C+)line}) at=() to=() typo=()
+  local -i pos=1 i expect=1 n
+  for t in $tok; do
+    n=${line[pos,-1][(i)${(b)t}]}
+    (( n > ${#line} - pos + 1 )) && return 1        # (not found as written: leave it)
+    (( pos += n - 1 ))
+    if (( expect )); then
+      case $t in
+        ('|'|'||'|'&&'|'&'|'|&'|'&|'|'&!'|';'|';;'|'('|'{'|'!'|if|elif|while|until|then|do|else|time|nocorrect|noglob|builtin|command|exec|sudo|doas|env|nice|nohup) ;;
+        ([[:alpha:]_][[:alnum:]_]#(\[*\])#(|+)=*) ;;
+        (function|alias|unalias|hash|unhash|unfunction) return 1 ;;   # (names change here)
+        (*)
+          expect=0
+          if [[ $t != -* ]] && _axle_fix_typo_word $t; then
+            at+=($pos) to+=($REPLY) typo+=($t)
+          fi ;;
+      esac
+    else
+      [[ $t == ('|'|'||'|'&&'|'&'|'|&'|'&|'|'&!'|';'|';;'|'('|'{') ]] && expect=1
+    fi
+    (( pos += ${#t} ))
+  done
+  (( ${#at} )) || return 1
+  # From the end, so the positions before stay right.
+  for (( i = ${#at}; i >= 1; i-- )); do
+    line=${line[1,at[i]-1]}${to[i]}${line[at[i]+${#typo[i]},-1]}
+  done
+  REPLY=$line reply=($typo)
+}
+
+# On Enter: a mistyped command is asked about below the line. Status 0: run the line
+# (corrected, or as typed); 1: stay on it.
+_axle_fix_correct_ok() {
+  _axle_fix_declined=()
+  (( AXLE_FIX_CORRECT )) || return 0
+  [[ -o correct || -o correctall ]] && return 0     # (zsh's own asks: not twice)
+  [[ -z $PREBUFFER ]] || return 0
+  local REPLY reply
+  _axle_fix_typos "$BUFFER" || return 0
+  local new=$REPLY key w
+  local -a typo=($reply)
+  local def=y
+  for w in ${(z)new}; do [[ $w == ${~_axle_fix_risky} ]] && def=n; done
+  local what="${(j:, :)typo} isn't a command"
+  (( ${#typo} > 1 )) && what="${(j:, :)typo} aren't commands"
+  local q="  $what: run " hint=' (Y/n, e to edit)'
+  [[ $def == n ]] && hint=' (y/N, e to edit)'
+  local shown=${(V)new}
+  local -a hl_was=("${(@)region_highlight}")
+  local post_was=$POSTDISPLAY
+  POSTDISPLAY=$'\n'"$q$shown?$hint"
+  local -i s=$(( ${#BUFFER} + 1 + ${#q} ))
+  local acc=${_axle_c[accent]:-magenta} muted=${_axle_c[muted]:-244}
+  region_highlight+=("${#BUFFER} $s fg=$muted" "$s $(( s + ${#shown} )) fg=$acc,bold"
+                     "$(( s + ${#shown} + 1 )) $(( s + ${#shown} + 1 + ${#hint} )) fg=$muted")
+  zle -R
+  read -k 1 key
+  POSTDISPLAY=$post_was region_highlight=("${(@)hl_was}")
+  [[ $key == ($'\r'|$'\n') ]] && key=$def          # (Enter: the answer shown first)
+  case $key in
+    (y|Y) BUFFER=$new; CURSOR=${#BUFFER}; return 0 ;;
+    (n|N) _axle_fix_declined=($typo); return 0 ;;
+    (e|E) BUFFER=$new; CURSOR=${#BUFFER}; zle -R; return 1 ;;
+    (*)   zle -R; return 1 ;;
+  esac
+}
+
+# Everything Enter checks before the line runs (suggest's Enter calls it too).
+_axle_fix_enter_ok() { _axle_fix_parse_ok && _axle_fix_correct_ok }
+_axle_fix_accept_line() { _axle_fix_enter_ok && zle .accept-line; return 0 }   # (no beep when it stays)
 
 if [[ -n $AXLE_FIX_CMD ]]; then
   functions[$AXLE_FIX_CMD]='_axle_fix_cmd "$@"'

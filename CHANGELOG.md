@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.1 - Typo correction
+
+- `fix` asks before a mistyped command runs. Enter on a command that doesn't exist, with one
+  close to it that does (`ckear`), asks under the line: `ckear isn't a command: run clear?
+  (Y/n, e to edit)`. Enter or `y` runs `clear`, `n` runs `ckear` as typed (its "no such
+  command" then doesn't ask again), `e` puts `clear` on the line, Esc keeps the line. Only
+  command words are checked, after `|`, `&&`, `;`, `sudo`, `env`, `VAR=value` too. Short words
+  must be very close (`rg` is never `rm`), and a correction into a command that deletes or
+  overwrites asks with No first. `AXLE_FIX_CORRECT=0` turns it off, and it's asked about in
+  `axle configure`; with zsh's own `setopt correct`, zsh asks instead.
+- Typos are measured with the keyboard in mind: a key next to the right one, or two swapped
+  letters, is half a mistake. `fix` and "did you mean" no longer offer a command from your
+  history that isn't installed any more.
+- `axle run`: on macOS, a second git worktree of a project under a folder reached through a
+  symlink (`/var` is one) wasn't recognised as another checkout of the same project: it got the
+  next port without saying why.
+
 ## 0.3.0 - axle run
 
 `axle run`: run this project, or go back to the last one. Servers in the background, shown in

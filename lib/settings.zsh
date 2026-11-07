@@ -67,6 +67,7 @@ typeset -gA _axle_settings=(
   AXLE_UPSEARCH_STYLE   'tool|text||how the match looks (region_highlight)'
   AXLE_FIX_CMD          'tool|text|fix|the command that corrects the last one (empty: none)'
   AXLE_FIX_NOTFOUND     'tool|bool|1|say "no such command" in Axle'"'"'s style, with the closest one you could have meant'
+  AXLE_FIX_CORRECT      'tool|bool|1|on Enter, a command that doesn'"'"'t exist with one close to it: ask to run that one (n: as typed)'
   AXLE_FIX_PARSE        'tool|bool|1|on Enter, say why a line can'"'"'t be read (zsh'"'"'s parse error) and keep it to fix'
   AXLE_FIX_KEY          'tool|text|^[^[|key that corrects / toggles sudo (empty: none)'
   AXLE_SUGGEST          'tool|bool|1|suggestions as you type'

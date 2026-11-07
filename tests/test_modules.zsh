@@ -155,6 +155,91 @@ test_fix_command_puts_it_on_the_line() {
   return 0
 }
 
+# On Enter, a command that doesn't exist is matched to one close to it that does; only
+# words in command position, and short ones only by swapped letters or a neighbouring key.
+test_fix_typos_on_the_line() {
+  AXLE_MODULES=(fix) load_tool
+  mkdir -p $T/bin $T/Docs
+  local c
+  for c in clear git ls grep rm chmod python3; do print '#!/bin/sh' > $T/bin/$c; chmod +x $T/bin/$c; done
+  path=($T/bin); rehash
+  local -a cases=(
+    'ckear => clear'                      # k is next to l
+    'gti status => git status'            # swapped
+    'sl -la => ls -la'
+    'ls | grpe foo => ls | grep foo'
+    'sudo ckear => sudo clear'
+    'X=1 pyhton3 -V => X=1 python3 -V'
+    "echo 'a b' && ckear -x => echo 'a b' && clear -x"
+    'cd /tmp && ckear; gti log => cd /tmp && clear; git log'
+    'chmdo +x f => chmod +x f'
+    'rg foo => '                          # rg isn't rm: two letters, keys apart
+    'rn x => '                            # nor is rn (next to it, but too short to be sure)
+    'echo ckear => '                      # an argument, not a command
+    'ls ckear => '
+    'git status => '
+    './ckear => '                         # a path
+    '$ckear => '
+    'frobnicate-xyz => '                  # nothing close
+    'function ckear { } => '
+    'alias ckear=clear => '
+  )
+  local line want
+  for c in $cases; do
+    line=${c% => *} want=${c##* => }
+    if _axle_fix_typos "$line"; then
+      assert_eq "$REPLY" "$want" "[$line]"
+    else
+      [[ -z $want ]] || fail "[$line]: no correction, wanted [$want]"
+    fi
+  done
+  cd $T; setopt autocd
+  _axle_fix_typos 'Dcos' && fail "a folder with auto_cd: $REPLY"   # (Docs is two away anyway)
+  _axle_fix_typos 'Docs' && fail "a folder with auto_cd"
+  unsetopt autocd
+  return 0
+}
+
+# The question on Enter, in a live zsh: Enter runs the close one, n what was typed (and
+# "no such command" doesn't ask again), e puts it on the line, Esc keeps the line. One
+# that deletes or overwrites things asks with No first.
+test_fix_asks_on_enter() {
+  setopt localoptions extendedglob
+  zmodload zsh/zpty 2>/dev/null || return 0
+  mkdir -p $T/bin
+  print -r -- '#!/bin/sh
+echo "foobar $*" >> '$T'/ran' > $T/bin/foobar
+  print -r -- '#!/bin/sh
+echo "chmod $*" >> '$T'/ran' > $T/bin/chmod
+  chmod +x $T/bin/foobar $T/bin/chmod
+  zpty sh "HOME=$HOME XDG_CONFIG_HOME=$XDG_CONFIG_HOME XDG_CACHE_HOME=$XDG_CACHE_HOME XDG_DATA_HOME=$XDG_DATA_HOME HISTFILE=$T/hist TERM=xterm AXLE_UPDATE_CHECK=0 zsh -f -i"
+  zpty -w sh " PS1='> '; AXLE_MODULES=(fix); source $ROOT/axle.plugin.zsh; path=($T/bin \$path); rehash"
+  zpty -w sh " _rec() { print -r -- \"[\$BUFFER]\" >> $T/rec }; zle -N _rec; bindkey '^Xr' _rec"
+  zpty -w sh ": > $T/ready"
+  _wait $T/ready
+  local out='' chunk
+  _say() { zpty -n -w sh "$1"; sleep 0.3; while zpty -rt sh chunk 2>/dev/null; do out+=$chunk; done }
+  _until() { local -i i; for i in {1..50}; do [[ $out == *$1* ]] && return; _say ''; done }
+  _say $'fobar 1\r'; _until 'to edit)'
+  [[ $out == *"fobar isn't a command: run "*"foobar 1"*"(Y/n, e to edit)"* ]] || fail "asked: ${(V)out}"
+  _say $'\r'; _wait $T/ran 1                       # Enter: the close one
+  out=''
+  _say $'fobar 2\r'; _say n; _say $': > '$T$'/after\r'; _wait $T/after
+  [[ ${out//$'\e'\[[0-9;?]#[a-zA-Z]/} == *"fobar: no such command"* ]] || fail "as typed: ${(V)out}"
+  [[ $out == *"did you mean"* ]] && fail "asked twice: ${(V)out}"
+  _say $'fobar 3\r'; _say e; zpty -n -w sh $'\x18r'; _wait $T/rec 1   # e: on the line
+  _say $'\x15fobar 4\r'; _say $'\e'; zpty -n -w sh $'\x18r'; _wait $T/rec 2   # Esc: kept
+  out=''
+  _say $'\x15chmdo +x f\r'; _until 'to edit)'
+  [[ $out == *"(y/N, e to edit)"* ]] || fail "No first for chmod: ${(V)out}"
+  _say $'\r'; _say $': > '$T$'/after2\r'; _wait $T/after2
+  zpty -w sh $'\x15exit'; zpty -d sh 2>/dev/null
+  local -a ran=("${(@f)$(<$T/ran)}") rec=("${(@f)$(<$T/rec)}")
+  assert_eq "${(j:,:)ran}" "foobar 1" "only Enter's ran the close one"
+  assert_eq "$rec[1]" "[foobar 3]" "e: corrected, on the line"
+  assert_eq "$rec[2]" "[fobar 4]" "Esc: the line as it was"
+}
+
 # A live zsh in a pty: ↑/↓ search and Esc Esc.
 _live() {
   zmodload zsh/zpty 2>/dev/null || return 1
@@ -266,6 +351,7 @@ test_upsearch_through_a_multi_line_command() {
 test_esc_esc_fixes_and_toggles_sudo() {
   _live || return 0
   local -i _n=0
+  zpty -w sh ' AXLE_FIX_CORRECT=0'   # (no question on Enter: this is about Esc Esc)
   zpty -w sh 'gti status'      # fails: command not found
   _key $'\e\e'                # empty line: the fix
   _key $'\x15apt update\e\e'  # a typed line: sudo added

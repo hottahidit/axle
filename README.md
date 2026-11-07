@@ -516,7 +516,7 @@ Modules (all but `run` on by default; switch them in `axle configure`, or with `
 | `jump` | `j <words>`: cd to the folder you most likely mean | zoxide, z |
 | `search` | Ctrl-R: a history picker with filters | atuin, fzf's Ctrl-R |
 | `env` | activates a project's venv when you enter it, deactivates when you leave | direnv, autoenv |
-| `fix` | `fix` / Esc Esc: corrects the last command (typos, missing sudo) | thefuck, oh-my-zsh's sudo |
+| `fix` | `fix` / Esc Esc: corrects the last command (typos, missing sudo); asks on Enter before a mistyped command runs | thefuck, oh-my-zsh's sudo, zsh's `correct` |
 | `run` | `axle run`: runs this project (servers in the background, in the prompt), or the last one; off by default | foreman, overmind, npm run |
 
 All of them learn from one history log the tool keeps: every command with where it ran, its
@@ -621,6 +621,23 @@ nothing to correct), and on a line you're typing it adds or removes `sudo`.
 
 It never runs anything itself. `AXLE_FIX_CMD` renames the command (`''` for none), `AXLE_FIX_KEY`
 changes the key. (It does what the tool *thefuck* does, without the name.)
+
+**Before it runs.** When you press Enter on a command that doesn't exist and one close to it
+does, it asks first, under the line:
+
+```
+❯ ckear
+  ckear isn't a command: run clear? (Y/n, e to edit)
+```
+
+Enter or `y` runs `clear` (and that's what goes in your history), `n` runs `ckear` as you typed
+it, `e` puts `clear` on the line to change, Esc goes back to the line. Only the command words are
+checked (not arguments, paths or variables), and only when nothing by that name exists: no
+alias, function, builtin or program. Close means one mistake, and a key next to the right one or
+two swapped letters count as half of one; a word of two or three letters must be that close
+(`rg` is never `rm`). A correction into a command that deletes or overwrites (`rm`, `mv`,
+`chmod`, `kill`...) asks with No first. `AXLE_FIX_CORRECT=0` turns it off; with zsh's own
+`setopt correct` on, Axle leaves the asking to zsh.
 
 ## jump
 
