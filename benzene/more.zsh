@@ -77,8 +77,11 @@ _axle_direnv_first() {
 _axle_direnv_reorder() { _axle_direnv_first reorder }
 
 _axle_seg_direnv() {
-  (( $+commands[direnv] )) || return
   local envrc=$_axle_markers[.envrc]
+  # The cheap checks first: the first look in $commands makes zsh read every PATH folder
+  # (slow with WSL's Windows folders), which nobody without an .envrc should pay for.
+  [[ -n $DIRENV_DIR || -n $envrc ]] || return
+  _axle_which direnv || return
   if [[ -n $DIRENV_DIR && ( -z $envrc || ${DIRENV_DIR#-} == $envrc ) ]]; then
     _axle_paint direnv "${_axle_i[direnv]% }"
   elif [[ -n $envrc && $envrc != $HOME ]] && (( $+functions[_direnv_hook] )); then
@@ -140,7 +143,7 @@ _axle_more_lang() {
                 perl PLENV_VERSION scala SCALAENV_VERSION)
   [[ -n ${(P)mgr[$name]} ]] && want=${(P)mgr[$name]}
   [[ $prog == - ]] && prog=$name
-  bin=$commands[$prog]
+  _axle_which $prog; bin=$_axle_found
   if [[ $bin == */shims/* ]]; then
     # A version manager picks the version from the same pin: show it, and say when it
     # isn't installed (the command would fail).
@@ -174,7 +177,7 @@ _axle_seg_perl()  { _axle_more_lang perl }
 # Scala: running scala to ask takes a second, so without scalaenv show the version the
 # build asks for (build.sbt's scalaVersion).
 _axle_seg_scala() {
-  local bin=$commands[scala]
+  local bin; _axle_which scala; bin=$_axle_found
   if [[ $bin == */shims/* ]] || _axle_has_marker .scala-version; then
     _axle_more_lang scala
     return
@@ -327,11 +330,11 @@ _axle_task_counts() {
 
 # taskwarrior: overdue tasks always (amber); pending ones when expanded.
 _axle_seg_task() {
-  (( $+commands[task] )) || return
   local data=${TASKDATA:-$HOME/.task} f hour
   f=$data/pending.data
   [[ -r $f ]] || f=$data/taskchampion.sqlite3
   [[ -r $f ]] || return
+  _axle_which task || return     # (after the data: see _axle_seg_direnv)
   strftime -s hour %Y%m%d%H $EPOCHSECONDS      # tasks become overdue as time passes
   _axle_cached "task:$f:$hour" $f _axle_task_counts || return
   local -a n=(${=REPLY}); REPLY=''

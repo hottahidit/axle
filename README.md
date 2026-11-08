@@ -538,7 +538,7 @@ alternatives, Ctrl-N opens a short list of them below the line:
 | Key | Does |
 |---|---|
 | **→** or **End** | accept the suggestion (also `vi`'s `l`, `$` and `A`) |
-| **Ctrl-→** or **Alt-f** | accept its next word (also `vi`'s `w`, `e`, `W`, `E`) |
+| **Ctrl-→** or **Alt-f** | accept its next word, and in a path its next part: `Projects/` of `Projects/Mockingbird`, so you can type another folder in it (also `vi`'s `w`, `e`, `W`, `E`) |
 | **Ctrl-N** or **Shift-↓** | open the list of other options, then move down it |
 | **Ctrl-P** or **Shift-↑** | move up the list (with no list open, these keys keep their usual job: history) |
 | **Enter** | run what you typed (nothing is left in scrollback) |
@@ -741,10 +741,38 @@ project launcher that never got past its README; this is that idea, grown up ins
 - `axle doctor`: checks zsh and git versions, what's loaded, plugin conflicts, 24-bit colour,
   Nerd Font, tmux, the history file, config overrides and how fast the prompt draws, with a fix
   for anything that's off.
+- `axle doctor --startup`: where your shell's startup time goes (below).
 - `axle top`: the system live, with btop. Axle carries btop 1.4.8 with an Axle mode (key `A`:
   only what `axle run` started); `install.sh` offers to build it (`axle top --build` later; needs
   g++ 14+ or clang 19+), otherwise an installed btop runs.
 - `axle update`: `git pull` in the Axle checkout, then reload.
+
+### Why is my shell slow? `axle doctor --startup`
+
+It starts your real setup a few times in a separate shell and measures it: zsh itself, the
+system files in `/etc/zsh`, each of your files, every precmd hook before the first prompt; then
+once more with timing on every line, to show which plugin, file and line of `~/.zshrc` the time
+goes to, and the slowest functions. Then the known causes, biggest first, each with the change
+to make as text to copy:
+
+```
+  Your shell starts in 2055 ms (zsh by itself: 5 ms; your setup: 2050 ms; median of 3)
+
+  ~/.zshrc                            1387 ms
+    line 168  [ -s "$NVM_DIR/nvm.sh"   979 ms
+    line 181  eval "$(nemc init zsh)   549 ms
+
+  1. nvm loads node at every start (about 882 ms)
+  2. ~/.zshrc line 181 runs nemc at every start (about 549 ms)
+  3. compinit runs 2 times (about 307 ms)
+  4. 30 of your 47 PATH folders are on Windows drives (about 142 ms per lookup)
+```
+
+What it knows: nvm, `compinit` run more than once (Ubuntu's `/etc/zsh/zshrc` runs it too) or
+checking every file each time, a program run through `$(...)` at every start (pyenv, conda,
+zoxide, ...), conda, WSL's Windows folders on PATH, a very long history. Your files are only
+read, history isn't written, oh-my-zsh's updater is kept quiet, and a setup that waits for
+input is stopped after 15 s and named. `--all` lists every file, hook and line; `--runs N`.
 
 ## Extending: segments, hooks, drops
 

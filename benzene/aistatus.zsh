@@ -236,7 +236,7 @@ _axle_aistatus_precmd() {
     _axle_ai_resolve $entry; (( ${#reply} )) || continue
     _axle_ai_stale $reply[1] $reply[2] && { due=1; break }
   done
-  (( due && $+commands[curl] )) || return
+  (( due )) && _axle_which curl || return
   mkdir -p $_axle_ai_dir 2>/dev/null
   if (( $+builtins[zle] )); then
     exec {_axle_ai_fd}< <(_axle_ai_worker 2>/dev/null)

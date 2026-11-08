@@ -272,7 +272,12 @@ _axle_sg_take() {
   setopt localoptions extendedglob
   [[ -n $_axle_sg_ghost && CURSOR -eq ${#BUFFER} ]] || return 1
   local take=$_axle_sg_ghost chosen=${_axle_sg_list[_axle_sg_sel]}
-  [[ $1 == word ]] && take=${(M)_axle_sg_ghost##[[:space:]]#[^[:space:]]##}
+  # One word, and in a path one part at a time, up to and with its "/": Projects/Mockingbird
+  # takes "Projects/" first, so you can type another folder in Projects yourself.
+  if [[ $1 == word ]]; then
+    take=${(M)_axle_sg_ghost##[[:space:]]#/#[^[:space:]/]#/#}
+    [[ -n ${take//[[:space:]]/} ]] || take=${(M)_axle_sg_ghost##[[:space:]]#[^[:space:]]##}
+  fi
   BUFFER+=$take
   CURSOR=${#BUFFER}
   _axle_sg_buffer=$BUFFER _axle_sg_cursor=$CURSOR _axle_sg_open=0

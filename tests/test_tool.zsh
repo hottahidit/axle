@@ -202,3 +202,20 @@ echo "btop $*" > "'$T'/btop.ran"' > $T/bin/btop
   fi
   return 0
 }
+
+# Ctrl-→ / Alt-f: one word, and in a path one part at a time.
+test_suggest_partial_accept_stops_at_slashes() {
+  AXLE_MODULES=(suggest) load_tool
+  _part() {   # _part <typed> <suggested>: what one partial accept leaves on the line
+    BUFFER=$1 CURSOR=${#1}
+    _axle_sg_list=("$2") _axle_sg_sel=1 _axle_sg_ghost=${2#$1}
+    _axle_sg_take word; REPLY=$BUFFER
+  }
+  _part 'cd ' 'cd Projects/Mockingbird';  assert_eq "$REPLY" 'cd Projects/' "up to the slash"
+  _part 'cd Projects/' 'cd Projects/Mockingbird'; assert_eq "$REPLY" 'cd Projects/Mockingbird' "then the next part"
+  _part 'cat ' 'cat /etc/hosts';           assert_eq "$REPLY" 'cat /etc/' "a full path, part by part"
+  _part 'cd ' 'cd ~/repos/axle';           assert_eq "$REPLY" 'cd ~/' "~ first"
+  _part 'git' 'git commit -m "x"';         assert_eq "$REPLY" 'git commit' "a plain word, as before"
+  _part 'ls' 'ls -la';                     assert_eq "$REPLY" 'ls -la' "an option, as before"
+  _part 'open ' 'open https://example.com/a'; assert_eq "$REPLY" 'open https://' "a URL's //, together"
+}

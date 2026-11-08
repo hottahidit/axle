@@ -520,7 +520,8 @@ _axle_venv_state() {
 }
 
 _axle_seg_python() {
-  local name='' bin=${commands[python3]:-$commands[python]}
+  local name='' bin=''
+  _axle_which python3 || _axle_which python; bin=$_axle_found
   local -a reply
   _axle_venv_state
   if [[ $reply[1] != ok ]]; then
@@ -619,7 +620,7 @@ _axle_lang() {
 _axle_seg_node() {
   _axle_has_marker package.json .nvmrc .node-version .tool-versions || return
   REPLY=''
-  [[ -n $commands[node] ]] && _axle_version $commands[node] --version
+  _axle_which node && _axle_version $_axle_found --version
   local have=$REPLY; _axle_pin node
   [[ $REPLY == '' ]] && ! _axle_has_marker package.json .nvmrc .node-version && return
   _axle_lang node "$have" "$REPLY"
@@ -628,7 +629,7 @@ _axle_seg_node() {
 _axle_seg_go() {
   _axle_has_marker go.mod || return
   REPLY=''
-  [[ -n $commands[go] ]] && _axle_version $commands[go] version
+  _axle_which go && _axle_version $_axle_found version
   local have=$REPLY; _axle_pin go
   _axle_lang go "$have" "$REPLY"
 }
@@ -636,7 +637,7 @@ _axle_seg_go() {
 _axle_seg_rust() {
   _axle_has_marker Cargo.toml rust-toolchain rust-toolchain.toml || return
   REPLY=''
-  [[ -n $commands[rustc] ]] && _axle_version $commands[rustc] --version
+  _axle_which rustc && _axle_version $_axle_found --version
   local have=$REPLY; _axle_pin rust
   _axle_lang rust "$have" "$REPLY"
 }
@@ -726,7 +727,7 @@ _axle_seg_tmux() {
     _axle_paint tmux "$_axle_i[tmux]${where//\%/%%}"
     return
   fi
-  [[ -S ${TMUX_TMPDIR:-/tmp}/tmux-$UID/default ]] && (( $+commands[tmux] )) || return
+  [[ -S ${TMUX_TMPDIR:-/tmp}/tmux-$UID/default ]] && _axle_which tmux || return
   if (( EPOCHSECONDS - ${_axle_cache[tmux.at]:-0} >= 30 )); then
     _axle_cache[tmux.at]=$EPOCHSECONDS
     _axle_cache[tmux]=${#${(M)${(f)"$(command tmux list-sessions -F '#{session_attached}' 2>/dev/null)"}:#0}}

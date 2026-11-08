@@ -76,6 +76,13 @@ _axle_complete() {
     stats)
       [[ $words[CURRENT-1] == --days ]] && { _message 'number of days'; return }
       compadd -- --here --days ;;
+    doctor)
+      if (( CURRENT == 3 )); then
+        _values option '--startup[where your shell startup time goes]'
+      elif [[ $words[3] == --startup ]]; then
+        [[ $words[CURRENT-1] == --runs ]] && { _message 'how many starts (default 3)'; return }
+        compadd -- --all --runs --login --no-login
+      fi ;;
     history)
       _message 'how many (default 20)' ;;
     top)

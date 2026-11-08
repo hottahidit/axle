@@ -12,7 +12,7 @@
 
 typeset -gA _axle_cmd_fn _axle_cmd_group _axle_cmd_usage _axle_cmd_desc
 typeset -g  AXLE_REPO=${AXLE_REPO:-https://github.com/hottahidit/axle}
-typeset -g  AXLE_VERSION=0.3.1
+typeset -g  AXLE_VERSION=0.3.2
 
 axle_command() {
   _axle_cmd_fn[$1]=$2 _axle_cmd_group[$1]=$3 _axle_cmd_usage[$1]=$4 _axle_cmd_desc[$1]=$5
@@ -209,7 +209,8 @@ _axle_complete_later() {
 _axle_complete_register || { [[ -o interactive ]] && add-zsh-hook precmd _axle_complete_later }
 
 # The daily update check (once per shell, whichever part loads first).
-if [[ -o interactive ]] && (( ! ${+_axle_update_started} )); then
+# (Not while `axle doctor --startup` measures a shell.)
+if [[ -o interactive && -z $AXLE_PROFILING ]] && (( ! ${+_axle_update_started} )); then
   typeset -g _axle_update_started=1
   _axle_compile bg
   _axle_update_bg

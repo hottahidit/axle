@@ -18,6 +18,30 @@ typeset -g AXLE_SEP='│'
 # Into a pipe or a file, or with NO_COLOR (no-color.org) set: the same text, without
 # colours or bold (FORCE_COLOR keeps them).
 #   _axle_printp [-n] <text>
+# Where a program is (in $_axle_found, not REPLY, which segments use for their text;
+# status 1 when it isn't on PATH), for the prompt's checks.
+# Not $commands: its first use after PATH changes (nvm, conda, a venv do that) makes zsh read
+# every PATH folder, which with WSL's Windows folders took up to 0.6 s at the first prompt.
+# This looks for just the one name, stopping at the first match, and remembers the answer
+# until PATH changes ("not found" for a minute, in case it's installed meanwhile).
+typeset -gA _axle_which_at
+typeset -g  _axle_which_path='' _axle_found=''
+_axle_which() {
+  local name=$1 d
+  if [[ $PATH != $_axle_which_path ]]; then _axle_which_at=(); _axle_which_path=$PATH; fi
+  local seen=${_axle_which_at[$name]}
+  if [[ -n $seen ]]; then
+    if [[ $seen == /* ]]; then _axle_found=$seen; return 0; fi
+    (( EPOCHSECONDS - seen < 60 )) && { _axle_found=''; return 1 }
+  fi
+  _axle_found=''
+  for d in $path; do
+    [[ $d == /* && -x $d/$name && ! -d $d/$name ]] && { _axle_found=$d/$name; break }
+  done
+  _axle_which_at[$name]=${_axle_found:-$EPOCHSECONDS}
+  [[ -n $_axle_found ]]
+}
+
 _axle_printp() {
   if [[ -n $NO_COLOR || ( ! -t 1 && -z $FORCE_COLOR ) ]]; then
     setopt localoptions extendedglob

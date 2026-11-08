@@ -80,6 +80,7 @@ _axle_cmd_stats() {
 
 # `axle doctor`: check the setup, with a fix for anything that's off.
 _axle_cmd_doctor() {
+  [[ $1 == --startup ]] && { shift; _axle_cmd_startup "$@"; return }
   local ok=${_axle_c[ok]:-green} warn=${_axle_c[warn]:-yellow} bad=${_axle_c[error]:-red} m=${_axle_c[muted]:-244}
   local -i problems=0
   _dr() {  # _dr ok|warn|bad <what> [fix]

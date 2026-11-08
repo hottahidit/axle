@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.3.2 - Startup profiler
+
+- `axle doctor --startup`: where your shell's startup time goes. Your real setup is started a
+  few times in a separate shell (your files are only read, history isn't written): zsh itself,
+  `/etc/zsh`, each of your files, every precmd hook; then once more with timing on every line,
+  for each plugin, file and line of `~/.zshrc`, and the slowest functions. The known causes
+  come first, each with the change to make as text to copy: nvm, `compinit` run twice (Ubuntu's
+  `/etc/zsh/zshrc` runs it too), a program run through `$(...)` at every start, conda, WSL's
+  Windows folders on PATH, a very long history. A setup that waits for input is stopped and
+  named. Tab completes its options; `axle help doctor`.
+- Suggestions: Ctrl-→ / Alt-f accept a path one part at a time: on `cd ` suggesting
+  `Projects/Mockingbird`, it takes `Projects/`, and you type another folder in it yourself.
+- Faster first prompt after PATH changes (nvm, conda and venvs change it): the prompt's checks
+  for programs (python, node, go, rust, tmux, direnv, taskwarrior, ...) looked them up through
+  zsh's command table, whose first use reads every PATH folder; with WSL's Windows folders that
+  took up to 0.6 s. They now look for just the one program, and remember the answer until PATH
+  changes. The taskwarrior and direnv segments also check for task data or an `.envrc` first,
+  so without them nothing is looked up at all. (Found with `axle doctor --startup`.)
+
 ## 0.3.1 - Typo correction
 
 - `fix` asks before a mistyped command runs. Enter on a command that doesn't exist, with one
@@ -13,9 +32,6 @@
 - Typos are measured with the keyboard in mind: a key next to the right one, or two swapped
   letters, is half a mistake. `fix` and "did you mean" no longer offer a command from your
   history that isn't installed any more.
-- `axle run`: on macOS, a second git worktree of a project under a folder reached through a
-  symlink (`/var` is one) wasn't recognised as another checkout of the same project: it got the
-  next port without saying why.
 
 ## 0.3.0 - axle run
 
