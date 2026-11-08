@@ -137,6 +137,9 @@ test_run_detects_each_sample() {
   local py=python; whence -p python3 >/dev/null && py=python3
   local -a cases=(
     "fastapi|$py -m uvicorn main:api --reload | service | 8000 | python · FastAPI"
+    "fastapi-factory|$py -m uvicorn api.main:create_app --factory --reload | service | 8000 | python · FastAPI"
+    "fastapi-router|$py -m uvicorn server:application --reload | service | 8000 | python · FastAPI"
+    "fastapi-docs|$py -m uvicorn web.asgi:application --reload --port 9100 | service | 9100 | python · FastAPI"
     "flask|$py -m flask --app app.py run --debug | service | 5000 | python · Flask"
     "flask-main|$py app.py | service | 5000 | python · Flask"
     "django|$py manage.py runserver | service | 8000 | python · Django"
@@ -2039,4 +2042,24 @@ test_security_env_restart_logs() {
   assert_contains "$out" $'\e[31mred'
   axle run stop all >/dev/null
   return 0
+}
+
+# A FastAPI app run the way you ran it in that folder before (the history log), over what
+# the README or the code says; and when uvicorn can't load the app it was given, the fix.
+test_run_fastapi_from_history_and_diagnosis() {
+  AXLE_MODULES=(run) load_tool
+  fixtures
+  local root=$T/fx/fastapi-factory py=python; whence -p python3 >/dev/null && py=python3
+  print -r -- 'from fastapi import FastAPI
+def make(): return FastAPI()' > $root/srv.py
+  mkdir -p ${_axle_hist_file:h}
+  print -r -- "$EPOCHSECONDS"$'\t0\t3.00\t'"$root"$'\t\t'"MODE=dev uvicorn srv:make --factory" >> $_axle_hist_file
+  print -r -- "$EPOCHSECONDS"$'\t1\t0.50\t'"$root"$'\t\t'"uvicorn nope:app" >> $_axle_hist_file
+  assert_eq "$(detect fastapi-factory)" "$py -m uvicorn srv:make --factory --reload | service | 8000 | python · FastAPI" "what you ran here (that worked)"
+  assert_contains "$_axle_run_reason$(_axle_run_detect $root; print -r -- $_axle_run_reason)" "you ran it here before" "and says so"
+  # uvicorn's error for a wrong app: the cause, and the command detection finds now
+  print -r -- 'ERROR:    Error loading ASGI app. Attribute "app" not found in module "api.main".' > $T/log
+  _axle_run_diagnose $root $T/log || fail "diagnosed"
+  assert_contains "$_axle_run_cause" "can't find app in the module api.main" "the cause"
+  assert_contains "$_axle_run_remedy" "axle run set command $py -m uvicorn srv:make --factory --reload && axle run" "the fix"
 }

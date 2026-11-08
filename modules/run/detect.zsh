@@ -369,6 +369,127 @@ _axle_run_node_server() {
 
 # --- Python -----------------------------------------------------------------------
 
+# The ASGI app a Python file makes, at module level (REPLY = its name). An object first:
+# app = FastAPI(...), app: FastAPI = ..., app = create_app(); else a function that builds
+# one (_axle_run_pyfac=1: run with uvicorn's --factory). Status 1: it makes none (a file
+# that only imports FastAPI for a router or for types).
+_axle_run_py_app() {
+  setopt localoptions extendedglob
+  local line fn='' fac='' fw='(fastapi.|starlette.applications.|)(FastAPI|Starlette)'
+  local -a lines=("${(@f)1}")
+  typeset -g _axle_run_pyfac=0
+  for line in $lines; do
+    [[ $line == (#b)([A-Za-z_][A-Za-z0-9_]#)[[:space:]]#(:[^=]#|)=[[:space:]]#${~fw}\(* ||
+       $line == (#b)([A-Za-z_][A-Za-z0-9_]#)[[:space:]]#:[[:space:]]#${~fw}[[:space:]]#=* ||
+       $line == (#b)([A-Za-z_][A-Za-z0-9_]#)[[:space:]]#(:[^=]#|)=[[:space:]]#(create_app|make_app|build_app|get_app|get_application|app_factory)\(* ]] &&
+      { REPLY=$match[1]; return 0 }
+  done
+  for line in $lines; do
+    if [[ $line == (#b)(async[[:space:]]##|)def[[:space:]]##([A-Za-z_][A-Za-z0-9_]#)[[:space:]]#\(* ]]; then
+      fn=$match[2]
+      [[ $line == *-\>[[:space:]]#${~fw}[[:space:]]#:* ]] && fac=${fac:-$fn}   # (-> FastAPI)
+      continue
+    fi
+    [[ $line == [^[:space:]\#@\)]* ]] && fn=''      # (back at module level)
+    [[ -n $fn && $line == *${~fw}\(* ]] && fac=${fac:-$fn}
+  done
+  [[ -n $fac ]] || return 1
+  # An object made with it: app = make_it()
+  for line in $lines; do
+    [[ $line == (#b)([A-Za-z_][A-Za-z0-9_]#)[[:space:]]#(:[^=]#|)=[[:space:]]#$fac\(* ]] &&
+      { REPLY=$match[1]; return 0 }
+  done
+  REPLY=$fac _axle_run_pyfac=1
+}
+
+# uvicorn's app in a command line: `uvicorn module:name [--factory] [--port N]`, also with
+# python -m and VAR=value before it (REPLY = module:name; _axle_run_pyfac, _axle_run_kport).
+_axle_run_uvicorn_words() {
+  setopt localoptions extendedglob
+  local -a w=(${(z)1})
+  local t
+  local -i i on=0
+  REPLY='' _axle_run_pyfac=0 _axle_run_kport=''
+  for (( i = 1; i <= ${#w}; i++ )); do
+    t=${(Q)w[i]}
+    (( on )) || { [[ ${t:t} == uvicorn ]] && on=1; continue }
+    case $t in
+      (';'|'&&'|'||'|'|'|'&') break ;;
+      (--factory) _axle_run_pyfac=1 ;;
+      (--port) _axle_run_kport=${(Q)w[i+1]}; (( i++ )) ;;
+      (--port=*) _axle_run_kport=${t#--port=} ;;
+      (--app-dir|--app-dir=*) return 1 ;;          # (its module is elsewhere: not followed)
+      (--host|--env-file|--workers|--log-level|--root-path|--uds|--fd|--reload-dir|--reload-include|--reload-exclude|--lifespan|--loop|--http|--ws|--interface|--forwarded-allow-ips|--timeout-keep-alive|--ssl-keyfile|--ssl-certfile|--limit-concurrency|--backlog) (( i++ )) ;;
+      (-*) ;;
+      (*) [[ -z $REPLY && $t == [A-Za-z_][A-Za-z0-9_.]#:[A-Za-z_][A-Za-z0-9_]# ]] && REPLY=$t ;;
+    esac
+  done
+  [[ $_axle_run_kport == <-> ]] || _axle_run_kport=''
+  [[ -n $REPLY ]]
+}
+
+# Does module:name exist in the project at <root>? (The module's file, and the name made
+# at its top level; a function: _axle_run_pyfac=1.) REPLY = the module's file.
+_axle_run_py_target_ok() {
+  setopt localoptions extendedglob
+  local root=$1 mod=${2%%:*} name=${2#*:} f text line
+  local mpath=${mod//./\/}                        # (api.main → api/main)
+  for f in $root/$mpath.py $root/$mpath/__init__.py; do
+    _axle_run_read $f || continue
+    text=$REPLY
+    for line in "${(@f)text}"; do
+      if [[ $line == (async[[:space:]]##|)def[[:space:]]##${name}[[:space:]]#\(* ]]; then
+        _axle_run_pyfac=1; REPLY=$f; return 0
+      fi
+      [[ $line == ${name}[[:space:]]#(:[^=]#|)=* || $line == (from|import)[[:space:]]*[[:space:],]${name}([[:space:],]*|) ]] &&
+        { REPLY=$f; return 0 }
+    done
+  done
+  return 1
+}
+
+# How you or the project say to run it: `uvicorn module:name` you've run in this folder
+# before (the history log, newest first), else written in the README, docs/ or the code's
+# comments. Taken only when module:name exists. Sets the command (REPLY = where it's from).
+_axle_run_py_known() {
+  setopt localoptions extendedglob
+  local root=$1 py=$2 line src='' target f
+  local -a cands=() srcs=()
+  if [[ -r $_axle_hist_file ]]; then
+    for line in "${(@f)$(command awk -F'\t' -v d="$root" 'NF == 6 && $4 == d && $2 ~ /^(0|130|143)$/ && $6 ~ /uvicorn/ { print $6 }' $_axle_hist_file 2>/dev/null | command tail -n 20)}"; do
+      [[ -n $line ]] && cands=("$line" $cands) srcs=("you ran it here before" $srcs)
+    done
+  fi
+  for f in $root/(README|Readme|readme)(|.md|.rst|.txt)(N.) $root/docs/*.md(N.[1,10]) \
+           $root/(main|app|server|api|asgi|run)/*.py(N.[1,20]) $root/*.py(N.[1,20]); do
+    _axle_run_read $f || continue
+    for line in "${(@f)REPLY}"; do
+      [[ $line == *uvicorn[[:space:]]##[A-Za-z_]* ]] || continue
+      line=${line#*[\#\`\$>] }; line=${line//\`/}
+      cands+=("$line") srcs+=("${f#$root/} says so")
+    done
+  done
+  local -i i
+  for (( i = 1; i <= ${#cands}; i++ )); do
+    _axle_run_uvicorn_words "$cands[i]" || continue
+    target=$REPLY
+    local fac=$_axle_run_pyfac port=$_axle_run_kport
+    _axle_run_py_target_ok $root $target || continue
+    (( fac )) && _axle_run_pyfac=1
+    local text=''; _axle_run_read $REPLY && text=$REPLY
+    _axle_run_cmd=($py -m uvicorn $target)
+    (( _axle_run_pyfac )) && _axle_run_cmd+=(--factory)
+    _axle_run_cmd+=(--reload)
+    [[ -n $port ]] && _axle_run_cmd+=(--port $port)
+    local what='python · FastAPI'
+    [[ $text == *starlette* && $text != *fastapi* ]] && what='python · Starlette'
+    _axle_run_source="uvicorn $target"
+    _axle_run_set service ${port:-8000} "$what" "uvicorn $target: ${srcs[i]}"
+    return 0
+  done
+  return 1
+}
+
 _axle_run_detect_python() {
   local root=$1 REPLY py
   _axle_run_python $root; py=$REPLY
@@ -377,6 +498,8 @@ _axle_run_detect_python() {
     _axle_run_set service 8000 'python · Django' 'manage.py'
     return 0
   fi
+  # An ASGI app run the way you, or the project, run it.
+  _axle_run_py_known $root $py && return 0
   # Web apps: the likely entry files first, then the rest at the top and one level down.
   local -a files=($root/(main|app|server|api|asgi|wsgi|run|streamlit_app).py(N.)
                   $root/*.py(N.) $root/(app|api|src|server|backend)/*.py(N.))
@@ -434,12 +557,13 @@ _axle_run_detect_python() {
     fi
     case $fw in
       FastAPI|Starlette)
-        var=app
-        for line in ${(f)text}; do
-          [[ $line == (#b)([A-Za-z_][A-Za-z0-9_]#)[[:space:]]#=[[:space:]]#(fastapi.|starlette.applications.|)(FastAPI|Starlette)\(* ]] &&
-            { var=$match[1]; break }
-        done
-        _axle_run_cmd=($py -m uvicorn ${${rel%.py}//\//.}:$var --reload)
+        # (A file that imports it but makes no app, a router or types: not this one.)
+        _axle_run_py_app "$text" || continue
+        var=$REPLY
+        local mod=${${${rel%.py}//\//.}%.__init__}
+        _axle_run_cmd=($py -m uvicorn $mod:$var)
+        (( _axle_run_pyfac )) && _axle_run_cmd+=(--factory)
+        _axle_run_cmd+=(--reload)
         port=8000 ;;
       Flask)
         _axle_run_cmd=($py -m flask --app $rel run --debug)
@@ -454,7 +578,9 @@ _axle_run_detect_python() {
       [[ $fw == (FastAPI|Starlette) ]] && _axle_run_cmd+=(--port $port)
       [[ $fw == Flask ]] && _axle_run_cmd+=(--port $port)
     fi
-    _axle_run_set service $port "python · $fw" "$rel imports ${(L)fw}"
+    local why="$rel imports ${(L)fw}"
+    [[ $fw == (FastAPI|Starlette) ]] && (( _axle_run_pyfac )) && why="$rel builds the app in $var()"
+    _axle_run_set service $port "python · $fw" "$why"
     return 0
   done
   # One [project.scripts] entry in pyproject.toml.

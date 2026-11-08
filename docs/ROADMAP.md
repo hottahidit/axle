@@ -2,9 +2,9 @@
 
 Two themes, in order:
 
-- **v0.3.2 – v0.3.5 · Know your shell**: insight from what Axle already records, and from
+- **v0.3.2 – v0.3.6 · Know your shell**: insight from what Axle already records, and from
   your own `~/.zshrc`. Built on `main`, one tagged release per step.
-- **v0.3.6 – v0.4.0 · Find anything**: fuzzy search everywhere (Tab, files, folders,
+- **v0.3.7 – v0.4.0 · Find anything**: fuzzy search everywhere (Tab, files, folders,
   history, projects), finished as v0.4.0.
 
 Everything is built on `main`, one tagged release per step: each step stands on its own and
@@ -16,7 +16,7 @@ every step tested on Linux and macOS before it's tagged.
 
 ---
 
-## Part 1 · Know your shell (v0.3.2 – v0.3.5)
+## Part 1 · Know your shell (v0.3.2 – v0.3.6)
 
 (v0.3.1 went to `fix` asking before a mistyped command runs; the steps below moved up one,
 with the finishing work folded into v0.3.5.)
@@ -51,7 +51,7 @@ $ axle doctor --startup
 - **Done when:** on prepared sample setups (nvm, pyenv, oh-my-zsh with plugins, conda) it
   names the top cost correctly, and the totals match a stopwatch measurement within 10%.
 
-### v0.3.3 · Alias reminders (`hints` module)
+### v0.3.4 · Alias reminders (`hints` module)
 
 - After a command that an existing alias would have covered, one quiet line:
   `hint: you have an alias for that: gst` (shell aliases, global aliases, git aliases).
@@ -62,7 +62,7 @@ $ axle doctor --startup
 - **Done when:** a hint appears for an alias-able command and never for the alias itself,
   a git alias, or a command run through `sudo`/`time`; suggestions never shadow a command.
 
-### v0.3.4 · Command not found → how to get it
+### v0.3.5 · Command not found → how to get it
 
 - When a command doesn't exist: if it's a typo of one you have, `fix` already handles it;
   otherwise say what provides it and put the install command on the line (Esc Esc):
@@ -74,7 +74,7 @@ $ axle doctor --startup
   instead of replacing it silently.
 - **Done when:** answers in under 30 ms from the database; installs nothing itself.
 
-### v0.3.5 · Your week, and Know your shell finished
+### v0.3.6 · Your week, and Know your shell finished
 
 - `axle stats --week`: time spent per project (from the history log: commands and the gaps
   between them), most-run and slowest commands, what failed most, compared with the week
@@ -95,30 +95,30 @@ Finishing (in the same release):
 
 ---
 
-## Part 2 · Find anything (v0.3.6 – v0.4.0)
+## Part 2 · Find anything (v0.3.7 – v0.4.0)
 
 Fuzzy search, the reason people install fzf and zsh4humans, in plain zsh.
 
-### v0.3.6 · The fuzzy engine
+### v0.3.7 · The fuzzy engine
 - One matcher shared by everything below: letters in order, bonuses for word starts,
   consecutive runs and path ends, smart case; matches highlighted.
 - Speed budget: 5,000 candidates filtered in under 15 ms per keystroke; beyond that, it
   narrows incrementally from the previous result.
 - Uses `fzf` instead when it's installed and `AXLE_FUZZY=fzf` (or `auto`).
 
-### v0.3.7 · Tab completion as a fuzzy menu
+### v0.3.8 · Tab completion as a fuzzy menu
 - Tab shows zsh's own completions (so every command's completion works) in a filterable
   menu with their descriptions and groups; one candidate: completed directly, as now.
 - Steps aside when fzf-tab is loaded.
 
-### v0.3.8 · Files, folders, history
+### v0.3.9 · Files, folders, history, and pickers for Axle
 - **Ctrl-T**: pick files into the line (in a git repo: tracked and untracked-not-ignored
   files; elsewhere: a bounded walk skipping `node_modules`, `.git`, venvs).
 - **Alt-C**: go to a folder: frecent ones from `j` first, then subfolders.
 - **Ctrl-R**: a fuzzy mode for the existing picker.
 - Keys configurable; doesn't take over keys fzf's own bindings already use without asking.
 
-### v0.3.9 · Pickers for Axle itself
+#### Pickers for Axle itself (in v0.3.9)
 - `j -i` (or `ji`): choose among frecent folders.
 - `axle run` with several recent projects: a fuzzy picker.
 - `axle` alone in a terminal: a palette of commands and settings.
@@ -142,13 +142,13 @@ when asked; no branch:
 |---|---|
 | v0.3.1 | *(done)* Typo correction: `fix` asks before a mistyped command runs |
 | v0.3.2 | *(done)* Startup profiler (`axle doctor --startup`) |
-| v0.3.3 | Alias reminders |
-| v0.3.4 | Command not found |
-| v0.3.5 | Your week; Know your shell finished |
-| v0.3.6 | Fuzzy engine |
-| v0.3.7 | Fuzzy Tab completion |
-| v0.3.8 | Files, folders, history |
-| v0.3.9 | Pickers for Axle |
+| v0.3.3 | *(done)* Run fixes: FastAPI detection, typo prompt |
+| v0.3.4 | Alias reminders |
+| v0.3.5 | Command not found |
+| v0.3.6 | Your week; Know your shell finished |
+| v0.3.7 | Fuzzy engine |
+| v0.3.8 | Fuzzy Tab completion |
+| v0.3.9 | Files, folders, history, and pickers for Axle |
 | v0.4.0 | Previews; Find anything finished |
 
 A fix needed in between takes the next number, and the plan moves along.

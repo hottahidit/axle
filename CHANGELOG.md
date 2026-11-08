@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.3 - Run fixes
+
+- `axle run` finds a FastAPI / Starlette app the way you'd run it: as you ran it in that
+  folder before (from Axle's history), else as the project's README, `docs/` or the code's
+  comments say (`uvicorn asgi:app`), else from the code, now including an app built by a
+  function (`create_app()`, run with uvicorn's `--factory`) and an annotated one
+  (`app: FastAPI = ...`). Each is used only if its module and name exist; a file that imports
+  FastAPI only for a router is no longer taken for the app. Before, a project whose app is
+  made in `create_app()` was run as `uvicorn api.main:app`, which doesn't exist.
+- When uvicorn can't load the app it was given (`Attribute "app" not found in module ...`),
+  `axle run` says so and offers the command it finds now (Esc Esc puts it on the line).
+- Typo correction: `n` or Esc on "run clear?" keep your line as typed and run nothing
+  (before, `n` ran the mistyped command anyway); Enter again on that line runs it unasked.
+  `y` / Enter still run the correction, `e` puts it on the line; Ctrl-C clears the line, as
+  anywhere in zsh.
+
 ## 0.3.2 - Startup profiler
 
 - `axle doctor --startup`: where your shell's startup time goes. Your real setup is started a

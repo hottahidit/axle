@@ -3,6 +3,8 @@
 # line, and the command that fixes it goes to the fix module: Esc Esc (or `fix`) puts it on
 # the line, to check; nothing runs by itself.
 #
+#   uvicorn: Attribute "app" not found in module "m" / Could not import module "m"
+#                                      → axle run set command <what it finds now> && axle run
 #   No module named 'x'                → pip install x into the project's venv
 #                                        (-r requirements.txt if it's listed there; uv sync)
 #   ... and the project has no venv    → python3 -m venv .venv && .venv/bin/pip install ...
@@ -45,6 +47,7 @@ _axle_run_diagnose() {
     text=${text//$'\e'\[[0-9;?]#[a-zA-Z]/}         # (colours)
   fi
   if [[ -n $text ]]; then
+    _axle_run_diag_asgi $dir "$text" && return 0
     _axle_run_diag_python $dir "$text" && return 0
     _axle_run_diag_node $dir "$text" && return 0
     _axle_run_diag_port $dir "$text" $port && return 0
@@ -139,6 +142,27 @@ _axle_run_diag_python() {
     fi
   fi
   _axle_run_in $dir $install; _axle_run_remedy=$REPLY
+}
+
+# uvicorn couldn't load the app it was given (a command set by hand, or an app that moved):
+# what detection finds now, if that's different, set as the project's command.
+_axle_run_diag_asgi() {
+  local dir=$1 text=$2 want cmd
+  if [[ $text =~ 'Attribute "([^"]+)" not found in module "([^"]+)"' ]]; then
+    want="$match[2]:$match[1]"
+    _axle_run_cause="uvicorn can't find $match[1] in the module $match[2]"
+  elif [[ $text =~ 'Error loading ASGI app\. Could not import module "([^"]+)"' ]]; then
+    want=$match[1]
+    _axle_run_cause="uvicorn can't import the module $match[1]"
+  else
+    return 1
+  fi
+  # (In a subshell: detection sets the run's globals.)
+  cmd=$( _axle_run_detect $dir 2>/dev/null && [[ "$_axle_run_cmd" == *uvicorn* ]] &&
+         print -r -- "${(j: :)${(@q-)_axle_run_cmd}}" )
+  [[ -n $cmd && " $cmd " != *" $want "* ]] || return 0
+  _axle_run_cause+=": the app is at ${${cmd#*uvicorn }%% *}"
+  _axle_run_in $dir "axle run set command $cmd && axle run"; _axle_run_remedy=$REPLY
 }
 
 # --- Node -----------------------------------------------------------------------------

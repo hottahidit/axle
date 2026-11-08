@@ -224,20 +224,25 @@ echo "chmod $*" >> '$T'/ran' > $T/bin/chmod
   [[ $out == *"fobar isn't a command: run "*"foobar 1"*"(Y/n, e to edit)"* ]] || fail "asked: ${(V)out}"
   _say $'\r'; _wait $T/ran 1                       # Enter: the close one
   out=''
-  _say $'fobar 2\r'; _say n; _say $': > '$T$'/after\r'; _wait $T/after
-  [[ ${out//$'\e'\[[0-9;?]#[a-zA-Z]/} == *"fobar: no such command"* ]] || fail "as typed: ${(V)out}"
-  [[ $out == *"did you mean"* ]] && fail "asked twice: ${(V)out}"
-  _say $'fobar 3\r'; _say e; zpty -n -w sh $'\x18r'; _wait $T/rec 1   # e: on the line
-  _say $'\x15fobar 4\r'; _say $'\e'; zpty -n -w sh $'\x18r'; _wait $T/rec 2   # Esc: kept
+  # n: the line as typed, nothing runs; Enter again runs it, unasked.
+  _say $'fobar 2\r'; _say n; zpty -n -w sh $'\x18r'; _wait $T/rec 1
+  [[ ${out//$'\e'\[[0-9;?]#[a-zA-Z]/} == *"no such command"* ]] && fail "n ran it: ${(V)out}"
+  out=''
+  _say $'\r'; _say $': > '$T$'/after\r'; _wait $T/after
+  [[ ${out//$'\e'\[[0-9;?]#[a-zA-Z]/} == *"fobar: no such command"* ]] || fail "Enter again: as typed: ${(V)out}"
+  [[ $out == *"to edit)"* ]] && fail "asked twice: ${(V)out}"
+  _say $'fobar 3\r'; _say e; zpty -n -w sh $'\x18r'; _wait $T/rec 2   # e: on the line
+  _say $'\x15fobar 4\r'; _say $'\e'; zpty -n -w sh $'\x18r'; _wait $T/rec 3   # Esc: kept
   out=''
   _say $'\x15chmdo +x f\r'; _until 'to edit)'
   [[ $out == *"(y/N, e to edit)"* ]] || fail "No first for chmod: ${(V)out}"
-  _say $'\r'; _say $': > '$T$'/after2\r'; _wait $T/after2
+  _say $'\r'; _say $'\x15: > '$T$'/after2\r'; _wait $T/after2     # (Enter: No, kept)
   zpty -w sh $'\x15exit'; zpty -d sh 2>/dev/null
   local -a ran=("${(@f)$(<$T/ran)}") rec=("${(@f)$(<$T/rec)}")
   assert_eq "${(j:,:)ran}" "foobar 1" "only Enter's ran the close one"
-  assert_eq "$rec[1]" "[foobar 3]" "e: corrected, on the line"
-  assert_eq "$rec[2]" "[fobar 4]" "Esc: the line as it was"
+  assert_eq "$rec[1]" "[fobar 2]" "n: the line as typed, nothing ran"
+  assert_eq "$rec[2]" "[foobar 3]" "e: corrected, on the line"
+  assert_eq "$rec[3]" "[fobar 4]" "Esc: the line as it was"
 }
 
 # A live zsh in a pty: ↑/↓ search and Esc Esc.

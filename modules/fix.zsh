@@ -13,8 +13,9 @@
 # typing: adds or removes sudo.
 #
 # On Enter, a command that doesn't exist with one close to it that does (ckear → clear):
-# asks "run clear?". Enter or y runs clear; n runs ckear as you typed it; e puts clear
-# on the line to edit; Esc goes back to the line. After `axle run` says why a service or task failed (a
+# asks "run clear?". Enter or y runs clear; e puts clear on the line to edit; n or Esc
+# keep your line as you typed it (nothing runs), and Enter again runs it unasked; Ctrl-C
+# clears the line, as anywhere in zsh. After `axle run` says why a service or task failed (a
 # missing package, a port that's taken, a database not started), its fix comes first.
 #
 #   AXLE_FIX_CMD=fix      the command's name ('' = none; Esc Esc still works)
@@ -304,7 +305,8 @@ _axle_fix_parse_ok() {
 # --- correcting on Enter ------------------------------------------------------------
 
 : ${AXLE_FIX_CORRECT=1}
-typeset -ga _axle_fix_declined=()
+typeset -ga _axle_fix_declined=() _axle_fix_kept_typo=()
+typeset -g  _axle_fix_kept=''      # a line you kept as typed: Enter on it again runs it
 # Commands that delete or overwrite: a correction into one of them is asked with No first.
 typeset -g _axle_fix_risky='(rm|rmdir|unlink|shred|dd|mkfs|mkfs.*|fdisk|parted|wipefs|kill|killall|pkill|reboot|shutdown|poweroff|halt|truncate|mv|cp|ln|chmod|chown|chgrp|install)'
 
@@ -373,7 +375,13 @@ _axle_fix_typos() {
 # On Enter: a mistyped command is asked about below the line. Status 0: run the line
 # (corrected, or as typed); 1: stay on it.
 _axle_fix_correct_ok() {
-  _axle_fix_declined=()
+  # Enter again on a line you kept as typed: run it, unasked (its "no such command" then
+  # doesn't ask either). Any edit to it, and it's asked about again.
+  if [[ -n $_axle_fix_kept && $BUFFER == $_axle_fix_kept ]]; then
+    _axle_fix_declined=($_axle_fix_kept_typo) _axle_fix_kept='' _axle_fix_kept_typo=()
+    return 0
+  fi
+  _axle_fix_declined=() _axle_fix_kept='' _axle_fix_kept_typo=()
   (( AXLE_FIX_CORRECT )) || return 0
   [[ -o correct || -o correctall ]] && return 0     # (zsh's own asks: not twice)
   [[ -z $PREBUFFER ]] || return 0
@@ -396,14 +404,20 @@ _axle_fix_correct_ok() {
   region_highlight+=("${#BUFFER} $s fg=$muted" "$s $(( s + ${#shown} )) fg=$acc,bold"
                      "$(( s + ${#shown} + 1 )) $(( s + ${#shown} + 1 + ${#hint} )) fg=$muted")
   zle -R
+  # (Ctrl-C here clears the line, as anywhere in zsh: nothing runs.)
   read -k 1 key
+  if [[ $key == $'\e' ]]; then                    # (the rest of an arrow key: not typed in)
+    local rest; while read -t 0.02 -k 1 rest; do :; done
+  fi
   POSTDISPLAY=$post_was region_highlight=("${(@)hl_was}")
   [[ $key == ($'\r'|$'\n') ]] && key=$def          # (Enter: the answer shown first)
   case $key in
     (y|Y) BUFFER=$new; CURSOR=${#BUFFER}; return 0 ;;
-    (n|N) _axle_fix_declined=($typo); return 0 ;;
     (e|E) BUFFER=$new; CURSOR=${#BUFFER}; zle -R; return 1 ;;
-    (*)   zle -R; return 1 ;;
+    (*)   # n, Esc, Ctrl-C, anything else: your line as typed; nothing runs
+          _axle_fix_kept=$BUFFER _axle_fix_kept_typo=($typo)
+          zle -R; zle -M "Enter again runs it as typed" 2>/dev/null
+          return 1 ;;
   esac
 }
 

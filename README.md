@@ -709,6 +709,13 @@ workspaces, `apps/*`, a Procfile's `worker:`) asks once which to start. A taken 
 who has it, and you choose: the next free port, stopping the other, or cancel. A second git
 worktree of a project runs as `shop@feature-x`, on the next port.
 
+A FastAPI or Starlette app is run the way you ran it in that folder before (`uvicorn
+asgi:app`, from Axle's history), else the way the project says (a `uvicorn module:app` in the
+README, `docs/` or the code's comments), else from the code: the app made at a module's top
+level, or the function that builds it (`create_app()`, run with `--factory`). Each is used
+only if that module and name really exist; a file that imports FastAPI only for a router
+isn't taken for the app.
+
 **Nothing runs unseen.** The first time a project's command runs, it's shown and you're asked;
 when it changes (a `git pull` edits the script), you're asked again, and `axle run restart` won't
 run a changed one. `.env` files are read as data and never sourced (and can't set `PATH` or
