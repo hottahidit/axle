@@ -24,10 +24,12 @@ _axle_su_write_dotdir() {
 [[ -n $AXLE_SU_ZPROF ]] && zmodload zsh/zprof
 zmodload zsh/datetime
 print -r -- "mark env-start $EPOCHREALTIME" >> $AXLE_SU_OUT
-# compinit, timed and counted wherever it's called from (it's a function either way).
+# compinit, timed and counted wherever it's called from (it's a function either way). With
+# -u: it never stops to ask about "insecure directories" (nobody answers here); its check
+# still runs, so it takes the same time.
 compinit() {
   local -F s=$EPOCHREALTIME
-  unfunction compinit; autoload -Uz compinit; compinit "$@"; local r=$?
+  unfunction compinit; autoload -Uz compinit; compinit -u "$@"; local r=$?
   print -r -- "compinit $s $EPOCHREALTIME" >> $AXLE_SU_OUT
   functions[compinit]=$_axle_su_compinit
   return r

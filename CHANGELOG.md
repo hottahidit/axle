@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.3.2 - CI fixes
+
+- `axle doctor --startup`: a setup where `compinit` stops to ask about "insecure
+  directories" (a folder others can write to, on fpath) waited forever in the measured
+  shell; it's now measured without stopping to ask (its check still runs). Ubuntu's
+  `/etc/zsh/zshrc` runs `compinit`, which is how CI met it.
+- `axle update --check` showed nothing new when the new version's number starts with yours
+  (0.3.3 → 0.3.3.2): it now stops at your version's own heading.
+- Tests: the split-arrow-key test pauses less, for slower CI machines.
+
 ## 0.3.3 - Run fixes
 
 - `axle run` finds a FastAPI / Starlette app the way you'd run it: as you ran it in that

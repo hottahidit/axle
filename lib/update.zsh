@@ -18,7 +18,8 @@ _axle_update_changes() {
   local -i on=0
   for line in "${(@f)$(command git -C $AXLE_ROOT show "$1:CHANGELOG.md" 2>/dev/null)}"; do
     if [[ $line == '## '* ]]; then
-      [[ $line == "## $AXLE_VERSION"* ]] && break
+      # (this version's own heading, not one it starts: 0.3.3 isn't 0.3.3.2 or 0.3.30)
+      [[ $line == "## $AXLE_VERSION" || $line == "## $AXLE_VERSION "* ]] && break
       on=1
     fi
     (( on )) && print -r -- "  $line"

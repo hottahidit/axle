@@ -1515,7 +1515,7 @@ test_run_top_views() {
   # An arrow key whose bytes come apart (Windows Terminal, WSL) is still an arrow. (The
   # pause is zselect's: starting the sleep program can take longer than 0.1 s on CI.)
   zmodload zsh/zselect
-  out=$( { print -n $'\e'; zselect -t 3; print -n '[A' } | { _axle_top_key 1; print -r -- $REPLY } )
+  out=$( { print -n $'\e'; zselect -t 1; print -n '[A' } | { _axle_top_key 1; print -r -- $REPLY } )
   assert_eq "$out" "up" "an arrow key in pieces"
   out=$( print -n 'j' | { _axle_top_key 1; print -r -- $REPLY } )
   assert_eq "$out" "j" "a letter"

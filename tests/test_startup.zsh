@@ -63,3 +63,14 @@ test_which_finds_and_remembers() {
   [[ -d $T/bin1 ]] && mkdir $T/bin1/dir-xyz && { _axle_which dir-xyz && fail "a folder isn't a program" }
   return 0
 }
+
+# compinit's "insecure directories" question (a folder others can write to, on fpath) would
+# wait forever in the measured shell: it's measured without stopping to ask.
+test_startup_with_insecure_completion_folders() {
+  load_tool
+  mkdir -p $HOME/insecure; chmod 777 $HOME/insecure
+  print -r -- 'fpath=($HOME/insecure $fpath); autoload -Uz compinit; compinit -d $HOME/.zcompdump; PS1="> "' > $HOME/.zshrc
+  local out
+  out=$(_AXLE_SU_LIMIT_CS=1000 axle doctor --startup --no-login --runs 1 2>&1) || fail "measured: $out"
+  plain "$out"; assert_match "$REPLY" "*Your shell starts in [0-9]## ms*" "it finished"
+}
