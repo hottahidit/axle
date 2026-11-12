@@ -392,3 +392,61 @@ test_module_list_is_the_modules() {
   assert_contains "$out" "no module 'nosuch' (available: " "the load-time message"
   assert_contains "$out" "jump" "names the real ones"
 }
+
+# hints: "you have an alias for that", once a day each; and axle alias suggest.
+test_hints_for_aliases() {
+  AXLE_MODULES=(hints) load_tool
+  alias gst='git status' g='git' gco='git checkout' ll='ls -la'
+  alias -g G='| grep'
+  local REPLY
+  _axle_hint_find 'git status';       assert_eq "$REPLY" 'gst' "the alias"
+  _axle_hint_find 'git status -s';    assert_eq "$REPLY" 'gst -s' "with what follows"
+  _axle_hint_find 'git checkout main'; assert_eq "$REPLY" 'gco main' "the longest that fits"
+  _axle_hint_find 'git statusx' && fail "a different word: no hint ($REPLY)"
+  _axle_hint_find 'gst' && fail "you typed the alias"
+  _axle_hint_find 'sudo git status' && fail "not through sudo"
+  _axle_hint_find 'time git status' && fail "not through time"
+  _axle_hint_find 'ls' && fail "ls is an alias itself (ls -la is ll, but ls alone isn't)"
+  _axle_hint_find 'ps aux | grep zsh'; assert_eq "$REPLY" 'ps aux G zsh' "a global alias"
+  # git's own aliases
+  mkrepo $T/r; cd $T/r; git config alias.lg 'log --oneline --graph'
+  _axle_hint_find 'git log --oneline --graph -5'; assert_eq "$REPLY" 'git lg -5' "a git alias"
+  # Said once a day.
+  local out
+  out=$(_axle_hint_done 0 1.0 'git status' 2>&1); plain "$out"
+  assert_eq "$REPLY" 'hint: you have an alias for that: gst' "said"
+  _axle_hint_done 0 1.0 'git status' >/dev/null      # (in this shell: remembered)
+  out=$(_axle_hint_done 0 1.0 'git status' 2>&1); assert_eq "$out" '' "not again today"
+  AXLE_HINTS=0; _axle_hint_seen=(); out=$(_axle_hint_done 0 1.0 'git checkout x' 2>&1); assert_eq "$out" '' "AXLE_HINTS=0"
+}
+
+test_alias_suggest_names_and_saves() {
+  AXLE_MODULES=(hints) load_tool
+  mkdir -p ${_axle_hist_file:h}
+  local i
+  for i in {1..7}; do
+    print -r -- "$EPOCHSECONDS"$'\t0\t1.00\t'"$HOME"$'\t\t'"docker compose up -d --build" >> $_axle_hist_file
+  done
+  for i in {1..6}; do
+    print -r -- "$EPOCHSECONDS"$'\t0\t1.00\t'"$HOME"$'\t\t'"kubectl get pods -A" >> $_axle_hist_file
+  done
+  print -r -- "$EPOCHSECONDS"$'\t0\t1.00\t'"$HOME"$'\t\t'"terraform apply" >> $_axle_hist_file   # (once)
+  local -a reply
+  _axle_alias_candidates || fail "found some"
+  assert_contains "${(j:|:)reply}" $'7\tdocker compose up -d --build' "the long one, whole"
+  assert_contains "${(j:|:)reply}" $'6\tkubectl get pods -A' "the other"
+  [[ ${(j:|:)reply} == *terraform* ]] && fail "once isn't often"
+  [[ ${(j:|:)reply} == *$'\tdocker compose up'$'|'* || ${(j:|:)reply} == *$'\tdocker compose'$'|'* ]] && fail "not its shorter prefixes too"
+  local REPLY
+  _axle_alias_name 'kubectl get pods -A'; assert_eq "$REPLY" 'kgp' "first letters, options left out"
+  alias kgp='x'; _axle_alias_name 'kubectl get pods -A'; assert_eq "$REPLY" 'kgpo' "taken: one more letter"
+  # Saving (the checkbox answered in place of you)
+  axle_checkbox() { reply=(1) }
+  axle alias suggest >/dev/null
+  assert_contains "$(<$AXLE_CONFIG)" "alias dcu='docker compose up -d --build'" "saved, quoted"
+  assert_eq "$aliases[dcu]" 'docker compose up -d --build' "and set now"
+  assert_contains "$(axle alias)" "alias dcu=" "listed"
+  axle alias rm dcu >/dev/null
+  [[ "$(<$AXLE_CONFIG)" == *dcu=* ]] && fail "removed"
+  return 0
+}

@@ -76,6 +76,13 @@ _axle_complete() {
     stats)
       [[ $words[CURRENT-1] == --days ]] && { _message 'number of days'; return }
       compadd -- --here --days ;;
+    alias)
+      if (( CURRENT == 3 )); then
+        _values action 'suggest[aliases for what you type often]' 'ls[the ones Axle saved]' 'rm[remove one]'
+      elif [[ $words[3] == rm ]]; then
+        local -a mine=(${${${(M)${(f)"$(<${AXLE_CONFIG:-/dev/null} 2>/dev/null)"}:#alias *}#alias }%%=*})
+        _describe -t aliases alias mine
+      fi ;;
     doctor)
       if (( CURRENT == 3 )); then
         _values option '--startup[where your shell startup time goes]'

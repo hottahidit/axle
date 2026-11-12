@@ -14,6 +14,7 @@
 #   search     Ctrl-R: a history picker (filter by this folder, by success)
 #   env        activate a project's venv when you cd in, deactivate when you leave
 #   fix        `fix` / Esc Esc: correct the last command (typos, sudo)
+#   hints      "you have an alias for that"; `axle alias suggest`
 #   run        `axle run`: run this project, or go back to the last one (off by default)
 #
 # Without oh-my-zsh, AXLE_THEME=benzene loads the Benzene prompt as well.
@@ -41,10 +42,10 @@ _axle_lazy lib/rank.zsh _axle_jump_load _axle_jump_rank
 () {
   # Default modules. A list that's just an earlier version's default is upgraded, so
   # `axle reload` picks up new modules; a list you set yourself is left alone.
-  local -a defaults=(suggest highlight upsearch jump search env fix)
+  local -a defaults=(suggest highlight upsearch jump search env fix hints)
   # (Earlier versions' complete lists count as "everything", so new modules join them.)
   if (( ! ${+AXLE_MODULES} )) ||
-     [[ "$AXLE_MODULES" == (aistatus|aistatus suggest|suggest jump search env|$_axle_auto_modules) ]]; then
+     [[ "$AXLE_MODULES" == (aistatus|aistatus suggest|suggest jump search env|suggest highlight upsearch jump search env fix|$_axle_auto_modules) ]]; then
     typeset -ga AXLE_MODULES=($defaults)
     typeset -g _axle_auto_modules="$defaults"
   fi

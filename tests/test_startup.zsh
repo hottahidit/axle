@@ -3,7 +3,7 @@
 # A setup with known costs: a slow "nvm", a slow $(...) line, compinit twice.
 _slow_setup() {
   mkdir -p $HOME/.nvm
-  print -r -- 'zmodload zsh/zselect; zselect -t 15; nvm() { :; }' > $HOME/.nvm/nvm.sh
+  print -r -- 'zmodload zsh/zselect; zselect -t 40; nvm() { :; }' > $HOME/.nvm/nvm.sh
   cat > $HOME/.zshrc <<'EOF'
 export NVM_DIR=$HOME/.nvm
 source $NVM_DIR/nvm.sh
@@ -27,7 +27,7 @@ test_startup_names_the_costs() {
   assert_match "$out" "*compinit runs [23] times*" "compinit twice"
   assert_match "$out" "*line 3*eval*" "the slow line, with its number"
   assert_match "$out" "*~/.zshrc line 3 runs sleep at every start*" "and what it runs"
-  # The biggest fix first: nvm (150 ms) before the line (80 ms).
+  # The biggest fix first: nvm (400 ms) before the line (80 ms; wide apart, for slow CI).
   [[ ${out[(i)nvm loads node]} -lt ${out[(i)line 3 runs sleep]} ]] || fail "biggest first: $out"
   assert_eq "$(<$HOME/.zsh_history)" "$before" "history not written"
   local -a after=(${${TMPDIR:-/tmp}%/}/axle-startup.*(N))

@@ -51,7 +51,7 @@ $ axle doctor --startup
 - **Done when:** on prepared sample setups (nvm, pyenv, oh-my-zsh with plugins, conda) it
   names the top cost correctly, and the totals match a stopwatch measurement within 10%.
 
-### v0.3.4 · Alias reminders (`hints` module)
+### v0.3.4 · Alias reminders (`hints` module) · done
 
 - After a command that an existing alias would have covered, one quiet line:
   `hint: you have an alias for that: gst` (shell aliases, global aliases, git aliases).
@@ -143,7 +143,7 @@ when asked; no branch:
 | v0.3.1 | *(done)* Typo correction: `fix` asks before a mistyped command runs |
 | v0.3.2 | *(done)* Startup profiler (`axle doctor --startup`) |
 | v0.3.3 | *(done)* Run fixes: FastAPI detection, typo prompt |
-| v0.3.4 | Alias reminders |
+| v0.3.4 | *(done)* Alias reminders |
 | v0.3.5 | Command not found |
 | v0.3.6 | Your week; Know your shell finished |
 | v0.3.7 | Fuzzy engine |
@@ -156,7 +156,25 @@ A fix needed in between takes the next number, and the plan moves along.
 Decided: the profiler is `axle doctor --startup`; the weekly line is off by default and asked
 about in `axle configure`; no separate branch.
 
+## After v0.3.6 and v0.4.0 (decided 2026-11-12)
+
+- **Right after v0.3.6: a hotfix with more colour schemes** for `axle palette`: Tokyo Night,
+  Gruvbox, Rosé Pine, Nord, and Catppuccin's light flavours (Benzene's colours are roles,
+  so each is a table of about 20 colours).
+- **Then v0.4.0** (Find anything) as planned.
+- **After v0.4.0: Axle on other shells** (fish, bash), and oh-my-posh compatibility. Porting
+  Benzene itself is undecided.
+
 ## Future ideas (not scheduled)
+
+- **Proposed for v0.3.6 (history insights):** command-chain macros (3–4 commands repeated in
+  a project → saved as an `axle run` task), and long-command notifications (AXLE_NOTIFY_SECS
+  through the desktop notifications `axle run` already sends, or a drop).
+- **Small, any hotfix:** `axle port 3000` / `axle port ls` (the port-holder lookup `axle run`
+  already has, with "stop it?").
+- **`axle run test --watch`:** tests again on save, a red tab when they fail.
+- **Distribution:** a Homebrew formula for the zsh part (btop still built locally, or an
+  installed btop); `axle ssh` (take the prompt and tools to a server) after that.
 
 - **Keys you keep.** Axle changes what some standard keys do (Ctrl-R, ↑/↓ with text typed,
   Ctrl-N/Ctrl-P with a suggestion list, → / End with a suggestion), which can fight muscle

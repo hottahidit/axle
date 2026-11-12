@@ -27,6 +27,7 @@ prompt. Together, each makes the other better.
   - [highlight](#highlight)
   - [upsearch](#upsearch)
   - [fix](#fix)
+  - [hints](#hints)
   - [jump](#jump)
   - [search](#search)
   - [env](#env)
@@ -517,6 +518,7 @@ Modules (all but `run` on by default; switch them in `axle configure`, or with `
 | `search` | Ctrl-R: a history picker with filters | atuin, fzf's Ctrl-R |
 | `env` | activates a project's venv when you enter it, deactivates when you leave | direnv, autoenv |
 | `fix` | `fix` / Esc Esc: corrects the last command (typos, missing sudo); asks on Enter before a mistyped command runs | thefuck, oh-my-zsh's sudo, zsh's `correct` |
+| `hints` | says when an alias you have would cover what you typed; `axle alias suggest` proposes new ones | zsh-you-should-use |
 | `run` | `axle run`: runs this project (servers in the background, in the prompt), or the last one; off by default | foreman, overmind, npm run |
 
 All of them learn from one history log the tool keeps: every command with where it ran, its
@@ -638,6 +640,28 @@ two swapped letters count as half of one; a word of two or three letters must be
 (`rg` is never `rm`). A correction into a command that deletes or overwrites (`rm`, `mv`,
 `chmod`, `kill`...) asks with No first. `AXLE_FIX_CORRECT=0` turns it off; with zsh's own
 `setopt correct` on, Axle leaves the asking to zsh.
+
+
+## hints
+
+When you type out a command one of your aliases covers, one quiet line after it says so:
+
+```
+~/repos/axle $ git status
+...
+hint: you have an alias for that: gst
+```
+
+Shell aliases (oh-my-zsh's git plugin alone defines about 200), global aliases (`alias -g`)
+and git's own (`git config alias.lg ...` → `git lg`). Each alias is mentioned at most once a
+day, never when you typed it, and never for a line run through `sudo`, `time` and the like
+(the alias wouldn't work there). `AXLE_HINTS=0` turns the hints off.
+
+`axle alias suggest` looks the other way: the long commands you've typed often (5 times or
+more in 90 days, 12 letters or more), each with a short name nothing else uses (the first
+letters of its words: `docker compose up -d --build` → `dcu`). Tick the ones you want; they're
+saved to Axle's config as plain `alias` lines and set at once. `axle alias` lists them,
+`axle alias rm dcu` removes one.
 
 ## jump
 

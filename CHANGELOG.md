@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.4 - Alias reminders
+
+- New module, `hints` (on by default; `axle configure` lists it): when you type out a
+  command one of your aliases covers, one quiet line says so: `hint: you have an alias for
+  that: gst`. Shell aliases, global aliases and git's own; at most once a day per alias,
+  never for the alias itself or a line run through `sudo` / `time`. `AXLE_HINTS=0` turns it
+  off. If your module list was the previous complete default, `hints` joins it.
+- `axle alias suggest`: long commands you type often, each with a short free name, ticked
+  and saved to Axle's config (`axle alias`, `axle alias rm <name>`).
+- Tests: the profiler's ranking test leaves a wider margin, for slow CI machines.
+
 ## 0.3.3.2 - CI fixes
 
 - `axle doctor --startup`: a setup where `compinit` stops to ask about "insecure

@@ -209,6 +209,7 @@ _cf_tool_steps() {
     "search:Ctrl-R opens a history picker with filters" \
     "env:switches a project's venv on and off as you cd in and out" \
     "fix:fix (or Esc Esc) corrects the last command: typos, missing sudo" \
+    "hints:says when an alias you have would cover what you typed (once a day each)" \
     "run:axle run runs this project (servers in the background, in the prompt), or the last one"
   _cf_recount
   local -a mods=(${=_cf[modules]})

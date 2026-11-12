@@ -58,7 +58,8 @@ typeset -gA _axle_settings=(
   AXLE_DROP_MAX         'theme|int|2|ok/info drops shown at once'
   # the tool
   AXLE_THEME            'tool|choice:,benzene||load the Benzene prompt from the plugin'
-  AXLE_MODULES          'tool|list|suggest highlight upsearch jump search env fix|modules to load'
+  AXLE_MODULES          'tool|list|suggest highlight upsearch jump search env fix hints|modules to load'
+  AXLE_HINTS            'tool|bool|1|say when an alias you have would cover what you typed'
   AXLE_HIGHLIGHT        'tool|bool|1|syntax highlighting as you type'
   AXLE_HIGHLIGHT_MAX    'tool|int|2000|no highlighting past this many characters'
   AXLE_UPSEARCH         'tool|bool|1|↑/↓ search history for what you have typed'
